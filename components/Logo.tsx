@@ -8,106 +8,118 @@ interface LogoProps {
 }
 
 const Logo: React.FC<LogoProps> = ({ className = "w-full h-full", isThinking = false, isSpeaking = false }) => {
-  // Brand Colors from JSON
-  const COLORS = {
-    green: "#2E7D32",
-    brown: "#6D3F1F",
-    lightGreen: "#7CB342",
-    yellow: "#FDB813",
-    orange: "#F57C00",
-    tan: "#E0AC69"
-  };
-
   return (
     <svg 
-      viewBox="0 0 200 200" 
-      className={className} 
+      viewBox="0 0 100 130" 
+      className={`${className} overflow-visible`} 
       xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round" 
+      strokeLinejoin="round"
       role="img"
-      aria-label="Konaki Logo - Mokorotlo with Sunrise"
+      aria-label="Konaki Logo"
     >
       <style>
         {`
-          @keyframes bounce-gentle {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
+          .plant-leaf { transform-origin: 50% 60%; }
+          .animate-speak { animation: logo-pulse 1s infinite ease-in-out; }
+          .animate-think .plant-leaf { animation: leaf-sway 1.5s infinite ease-in-out alternate; }
+          .animate-think .dot { animation: dot-blink 1s infinite alternate; }
+          
+          @keyframes logo-pulse { 
+            0% { transform: scale(1); } 
+            50% { transform: scale(1.05); } 
+            100% { transform: scale(1); } 
           }
-          @keyframes pulse-speak {
-            0% { transform: scale(0.95); opacity: 1; }
-            50% { transform: scale(1.02); opacity: 0.9; }
-            100% { transform: scale(0.95); opacity: 1; }
+          @keyframes leaf-sway { 
+            0% { transform: rotate(-5deg); } 
+            100% { transform: rotate(5deg); } 
           }
-          @keyframes sun-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          .animate-think .hat-group {
-            animation: bounce-gentle 1.2s infinite ease-in-out;
-          }
-          .animate-speak .hat-group {
-             animation: pulse-speak 0.8s infinite ease-in-out;
-          }
-          .animate-think .sun-rays {
-             animation: sun-spin 10s linear infinite;
-             transform-origin: 100px 100px;
+          @keyframes dot-blink {
+            0% { opacity: 0.3; }
+            100% { opacity: 1; }
           }
         `}
       </style>
-
-      {/* Circle Background */}
-      <circle cx="100" cy="100" r="95" fill="#ffffff" stroke={COLORS.lightGreen} strokeWidth="1" />
       
-      {/* Sunrise (Background Element) */}
-      <g className={isThinking ? "sun-rays" : ""}>
-        <circle cx="100" cy="100" r="60" fill={COLORS.yellow} opacity="0.2" />
-        <path d="M100 20 L100 40 M180 100 L160 100 M100 180 L100 160 M20 100 L40 100" stroke={COLORS.orange} strokeWidth="2" opacity="0.3" strokeLinecap="round"/>
-        <path d="M156 44 L142 58 M156 156 L142 142 M44 156 L58 142 M44 44 L58 58" stroke={COLORS.orange} strokeWidth="2" opacity="0.3" strokeLinecap="round"/>
-      </g>
-
-      {/* Main Content Group (Animated) */}
-      <g className={isThinking ? "animate-think" : isSpeaking ? "animate-speak" : ""}>
+      {/* Container Group */}
+      <g className={`${isSpeaking ? 'animate-speak' : ''} ${isThinking ? 'animate-think' : ''} origin-center`}>
           
-          <g className="hat-group" transform="translate(100, 110) scale(0.95)">
-            {/* Hat Base */}
-            <path 
-                d="M-65 40 Q0 65 65 40 L55 20 Q0 45 -55 20 Z" 
-                fill={COLORS.tan} 
-                stroke={COLORS.brown} 
-                strokeWidth="3"
-            />
-            {/* Hat Cone */}
-            <path 
-                d="M-55 20 Q0 -105 55 20" 
-                fill={COLORS.tan} 
-                stroke={COLORS.brown} 
-                strokeWidth="3"
-            />
-            
-            {/* Woven Patterns */}
-            <path d="M0 -85 L0 20" stroke={COLORS.brown} strokeWidth="1.5" strokeDasharray="4,3" />
-            <path d="M-35 0 Q0 -25 35 0" fill="none" stroke={COLORS.brown} strokeWidth="1.5" />
-            <path d="M-45 20 Q0 -5 45 20" fill="none" stroke={COLORS.brown} strokeWidth="1.5" />
-            
-            {/* Top Knot */}
-            <circle cx="0" cy="-90" r="6" fill={COLORS.brown} />
+          {/* Outer Arch Frame */}
+          <path 
+            d="M20 40 A30 30 0 0 1 80 40 V85 H20 V40 Z" 
+            strokeWidth="3" 
+            className="text-inherit"
+          />
+          
+          {/* Inner Arch Line (Detail) */}
+          <path 
+            d="M28 40 A22 22 0 0 1 72 40 V85" 
+            strokeWidth="1.5" 
+            className="opacity-50" 
+          />
+          
+          {/* Arch Bricks/Rays */}
+          <line x1="20" y1="40" x2="15" y2="40" strokeWidth="2" />
+          <line x1="80" y1="40" x2="85" y2="40" strokeWidth="2" />
+          <line x1="29" y1="13" x2="26" y2="9" strokeWidth="2" />
+          <line x1="71" y1="13" x2="74" y2="9" strokeWidth="2" />
+          <line x1="50" y1="10" x2="50" y2="5" strokeWidth="2" />
+
+          {/* Plant Elements */}
+          <g className="plant-group">
+              {/* Stem */}
+              <path d="M50 85 V50" strokeWidth="2.5" />
+              
+              {/* Soil / Roots Area */}
+              <path d="M28 75 Q50 65 72 75" strokeWidth="1.5" className="opacity-70" />
+              <path d="M35 85 Q50 80 65 85" strokeWidth="1.5" className="opacity-70" />
+
+              {/* Leaves */}
+              <path 
+                d="M50 60 Q30 50 30 35 Q45 50 50 60" 
+                fill="currentColor" 
+                stroke="none" 
+                className="plant-leaf"
+                style={{ transformOrigin: '50% 60%', animationDelay: '0.1s' }}
+              />
+              <path 
+                d="M50 60 Q70 50 70 35 Q55 50 50 60" 
+                fill="currentColor" 
+                stroke="none" 
+                className="plant-leaf"
+                style={{ transformOrigin: '50% 60%', animationDelay: '0.2s' }}
+              />
+              <path 
+                d="M50 50 Q35 25 50 15 Q65 25 50 50" 
+                fill="currentColor" 
+                stroke="none" 
+                className="plant-leaf"
+                style={{ transformOrigin: '50% 50%' }}
+              />
           </g>
 
-          {/* Stylized Crops/Fields (Foreground) */}
-          <path 
-            d="M35 150 Q55 120 45 90 M35 150 Q15 120 25 90" 
-            stroke={COLORS.green} 
-            strokeWidth="4" 
-            strokeLinecap="round" 
-            fill="none"
-          />
-          <path 
-            d="M165 150 Q145 120 155 90 M165 150 Q185 120 175 90" 
-            stroke={COLORS.green} 
-            strokeWidth="4" 
-            strokeLinecap="round" 
-            fill="none"
-          />
+          {/* Dots */}
+          <circle cx="35" cy="30" r="2" fill="currentColor" stroke="none" className="dot" />
+          <circle cx="65" cy="30" r="2" fill="currentColor" stroke="none" className="dot" style={{ animationDelay: '0.5s' }} />
+
       </g>
+
+      {/* Text 'konaki' */}
+      <text 
+        x="50" 
+        y="118" 
+        textAnchor="middle" 
+        fontFamily="sans-serif" 
+        fontWeight="800" 
+        fontSize="24" 
+        fill="currentColor" 
+        stroke="none"
+      >
+        konaki
+      </text>
     </svg>
   );
 };
