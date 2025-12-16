@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UserRole, Listing } from '../types';
+import { UserRole, Listing, FarmerProfile } from '../types';
 import { DISTRICTS } from '../constants';
 import LandCard from './LandCard';
 import MapComponent from './MapComponent';
@@ -13,13 +13,21 @@ interface DashboardProps {
   onSelectListing: (listing: Listing) => void;
   onAddListing: (listing: Listing) => void;
   onOpenAdvisor?: () => void;
-  onStartLiveCall?: () => void; // New Prop
+  onStartLiveCall?: () => void;
+  onStartMatching?: (profile: FarmerProfile) => void; // Updated to require profile
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onOpenAdvisor, onStartLiveCall }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onOpenAdvisor, onStartLiveCall, onStartMatching }) => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Bohle');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  
+  // Profile State
+  const [profileCrops, setProfileCrops] = useState('');
+  const [profileBudget, setProfileBudget] = useState('');
+  const [profileDistrict, setProfileDistrict] = useState(DISTRICTS[0]);
+
   const [isLocating, setIsLocating] = useState(false);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
 
@@ -122,6 +130,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
     setPreviewImage(null);
     setIsFormCVerified(false);
   };
+  
+  const handleStartProfile = () => {
+      setShowProfileModal(true);
+  }
+  
+  const handleSubmitProfile = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!onStartMatching) return;
+      
+      const profile: FarmerProfile = {
+          crops: profileCrops,
+          budget: profileBudget,
+          preferredDistricts: [profileDistrict]
+      };
+      
+      setShowProfileModal(false);
+      onStartMatching(profile);
+  }
 
   const getWelcomeTitle = () => {
       switch(role) {
@@ -219,7 +245,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
         )}
       </div>
 
-      {/* Global Actions (Advisor & Call) */}
+      {/* Global Actions (Advisor & Call & Match) */}
       {role === UserRole.FARMER && (
           <div className="fixed bottom-20 md:bottom-8 right-6 flex flex-col gap-4 z-20">
               
@@ -244,6 +270,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                      <div className="w-8 h-8">
                          <Logo isSpeaking={true} />
                      </div>
+                  </button>
+              )}
+              
+              {/* SMART MATCH (Tinder Style) */}
+              {onStartMatching && (
+                   <button 
+                    onClick={handleStartProfile}
+                    className="bg-gradient-to-r from-pink-500 to-orange-500 text-white p-4 rounded-full shadow-lg hover:scale-110 transition-all flex items-center justify-center w-14 h-14 animate-fade-in-up"
+                    title="Smart Match"
+                  >
+                     <span className="text-2xl">🔥</span>
                   </button>
               )}
           </div>
@@ -425,6 +462,77 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                             Kenya
                         </button>
                     </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* Profile Setup Modal for Matching */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-stone-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in-up relative overflow-hidden">
+                
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-500 to-orange-500"></div>
+                
+                <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center text-3xl shadow-inner">
+                        🕵🏽
+                    </div>
+                </div>
+
+                <h3 className="text-xl font-bold text-center text-stone-900 mb-1">Smart Match Setup</h3>
+                <p className="text-center text-stone-500 text-sm mb-6">Konaki needs to know what you are looking for.</p>
+                
+                <form onSubmit={handleSubmitProfile} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-stone-500 mb-1 uppercase tracking-wide">U batla ho lema eng? (Crops)</label>
+                        <input 
+                            type="text" 
+                            value={profileCrops}
+                            onChange={(e) => setProfileCrops(e.target.value)}
+                            className="w-full border border-stone-300 rounded-xl p-3 focus:ring-2 focus:ring-pink-500 outline-none bg-stone-50"
+                            placeholder="e.g. Poone, Linaoa, Koro"
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-stone-500 mb-1 uppercase tracking-wide">Budget ea hau? (Budget)</label>
+                        <input 
+                            type="text" 
+                            value={profileBudget}
+                            onChange={(e) => setProfileBudget(e.target.value)}
+                            className="w-full border border-stone-300 rounded-xl p-3 focus:ring-2 focus:ring-pink-500 outline-none bg-stone-50"
+                            placeholder="e.g. M5000 / Seahlolo"
+                            required
+                        />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-stone-500 mb-1 uppercase tracking-wide">Setereke (Preferred District)</label>
+                        <select 
+                             value={profileDistrict} 
+                             onChange={(e) => setProfileDistrict(e.target.value)}
+                             className="w-full border border-stone-300 rounded-xl p-3 focus:ring-2 focus:ring-pink-500 outline-none bg-stone-50"
+                        >
+                            {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        className="w-full py-3 mt-2 bg-gradient-to-r from-pink-600 to-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg flex items-center justify-center gap-2"
+                    >
+                        <span>🚀</span> Fumana Matches
+                    </button>
+                    
+                     <button 
+                        type="button"
+                        onClick={() => setShowProfileModal(false)}
+                        className="w-full py-2 text-sm text-stone-400 font-medium hover:text-stone-600"
+                    >
+                        Cancel
+                    </button>
                 </form>
             </div>
         </div>

@@ -18,6 +18,7 @@ interface MapComponentProps {
 const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, center }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
+  const markersLayer = useRef<any>(null);
 
   useEffect(() => {
     if (!mapRef.current || !window.L) return;
@@ -31,69 +32,130 @@ const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, 
         window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(mapInstance.current);
+        
+        // Load Leaflet.markercluster CSS dynamically if not present
+        if (!document.getElementById('marker-cluster-css')) {
+            const link = document.createElement('link');
+            link.id = 'marker-cluster-css';
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css';
+            document.head.appendChild(link);
+            
+            const link2 = document.createElement('link');
+            link2.rel = 'stylesheet';
+            link2.href = 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css';
+            document.head.appendChild(link2);
+        }
+
+        // Load Leaflet.markercluster JS dynamically
+        if (!window.L.MarkerClusterGroup) {
+             const script = document.createElement('script');
+             script.src = 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js';
+             script.onload = () => {
+                 // Re-trigger effect or handle ready state
+                 // For now, we rely on the component re-rendering or the next update
+             };
+             document.head.appendChild(script);
+        }
     }
 
-    // Clear existing markers
-    mapInstance.current.eachLayer((layer: any) => {
-        if (layer.options && layer.options.icon) {
-            mapInstance.current.removeLayer(layer);
+    // Debounce to allow script loading
+    const timer = setTimeout(() => {
+        if (!mapInstance.current) return;
+
+        // Clear existing markers layer
+        if (markersLayer.current) {
+            mapInstance.current.removeLayer(markersLayer.current);
         }
-    });
 
-    // Custom Icons
-    const createIcon = (color: string, emoji: string) => {
-        return window.L.divIcon({
-            className: 'custom-div-icon',
-            html: `<div style="background-color: ${color}; width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-size: 16px;">${emoji}</div>`,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-    };
+        // Custom Icons
+        const createIcon = (color: string, emoji: string) => {
+            return window.L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); font-size: 18px;">${emoji}</div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
+        };
 
-    const landIcon = createIcon('#15803d', '🌱'); // Green-700
-    const equipmentIcon = createIcon('#ea580c', '🚜'); // Orange-600
+        const landIcon = createIcon('#15803d', '🌱'); 
+        const equipmentIcon = createIcon('#ea580c', '🚜');
 
-    // Add Markers
-    listings.forEach(listing => {
-        if (listing.coordinates) {
-            const marker = window.L.marker(
-                [listing.coordinates.lat, listing.coordinates.lng],
-                { 
-                    icon: listing.category === 'EQUIPMENT' ? equipmentIcon : landIcon 
-                }
-            ).addTo(mapInstance.current);
-
-            // Simple Popup
-            const popupContent = `
-                <div style="font-family: sans-serif; min-width: 150px;">
-                    <strong style="display:block; margin-bottom: 4px; color: #1c1917;">${listing.type}</strong>
-                    <span style="font-size: 12px; color: #57534e;">${listing.district}</span>
-                    <br/>
-                    <button id="view-btn-${listing.id}" style="margin-top: 8px; background: #15803d; color: white; border: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; width: 100%;">Sheba (View)</button>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-
-            marker.on('popupopen', () => {
-                const btn = document.getElementById(`view-btn-${listing.id}`);
-                if (btn) {
-                    btn.onclick = () => onSelectListing(listing);
+        // Create Cluster Group if library loaded, else normal LayerGroup
+        if (window.L.MarkerClusterGroup) {
+            markersLayer.current = new window.L.MarkerClusterGroup({
+                showCoverageOnHover: false,
+                iconCreateFunction: function(cluster: any) {
+                    return window.L.divIcon({ 
+                        html: `<div style="background-color: #15803d; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #dcfce7;">${cluster.getChildCount()}</div>`, 
+                        className: 'my-cluster', 
+                        iconSize: window.L.point(40, 40) 
+                    });
                 }
             });
+        } else {
+            markersLayer.current = window.L.layerGroup();
         }
-    });
 
-    // Cleanup on unmount
-    return () => {
-        // We keep the instance alive for performance if re-rendering often, 
-        // but fully destroying is safer to avoid mem leaks in this specific setup.
-        // mapInstance.current.remove();
-        // mapInstance.current = null;
-    };
+        listings.forEach(listing => {
+            if (listing.coordinates) {
+                const marker = window.L.marker(
+                    [listing.coordinates.lat, listing.coordinates.lng],
+                    { 
+                        icon: listing.category === 'EQUIPMENT' ? equipmentIcon : landIcon 
+                    }
+                );
+
+                // Styled Popup
+                const popupContent = `
+                    <div style="font-family: 'Rubik', sans-serif; min-width: 200px; padding: 4px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                             <span style="font-size:20px;">${listing.category === 'EQUIPMENT' ? '🚜' : '🌱'}</span>
+                             <div>
+                                <strong style="display:block; color: #1c1917; font-size:14px; line-height:1.2;">${listing.type}</strong>
+                                <span style="font-size: 11px; color: #57534e; text-transform:uppercase; letter-spacing:0.5px; font-weight:bold;">${listing.district}</span>
+                             </div>
+                        </div>
+                        <p style="font-size:12px; color:#44403c; margin:0 0 8px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${listing.description}</p>
+                        <button id="view-btn-${listing.id}" style="
+                            background: #15803d; 
+                            color: white; 
+                            border: none; 
+                            padding: 8px 12px; 
+                            border-radius: 8px; 
+                            font-size: 12px; 
+                            font-weight: 600; 
+                            cursor: pointer; 
+                            width: 100%;
+                            transition: background 0.2s;
+                        ">
+                            Sheba (View Details)
+                        </button>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                marker.on('popupopen', () => {
+                    const btn = document.getElementById(`view-btn-${listing.id}`);
+                    if (btn) {
+                        btn.onclick = () => onSelectListing(listing);
+                    }
+                });
+
+                markersLayer.current.addLayer(marker);
+            }
+        });
+
+        mapInstance.current.addLayer(markersLayer.current);
+
+    }, 100);
+
+    return () => clearTimeout(timer);
+
   }, [listings, center, onSelectListing]);
 
-  return <div ref={mapRef} className="w-full h-full z-0" />;
+  return <div ref={mapRef} className="w-full h-full z-0 outline-none" />;
 };
 
 export default MapComponent;

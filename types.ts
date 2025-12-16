@@ -110,6 +110,18 @@ export interface GeminiResponse {
   suggestedActions?: string[]; // Dynamic smart suggestions
 }
 
+export interface FarmerProfile {
+  crops: string; // e.g. "Poone, Linaoa"
+  budget: string; // e.g. "M5000"
+  preferredDistricts: string[];
+}
+
+export interface MatchInsight {
+  listingId: string;
+  score: number; // 0-100
+  reason: string; // "Good soil for maize"
+}
+
 export enum ViewState {
   ONBOARDING,
   DASHBOARD,
@@ -117,5 +129,6 @@ export enum ViewState {
   CHAT,
   AGREEMENTS,
   DISPUTES,
-  CASHBOOK // New View
+  CASHBOOK,
+  MATCHING // New View for Tinder-like Matching
 }

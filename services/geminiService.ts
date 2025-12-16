@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { KONAKI_SYSTEM_INSTRUCTION } from "../constants";
-import { ChatMessage, GeminiResponse, Agreement, CashBookEntry, Listing } from "../types";
+import { ChatMessage, GeminiResponse, Agreement, CashBookEntry, Listing, FarmerProfile, MatchInsight } from "../types";
 
 // Initialize Gemini Client Lazily to avoid top-level crashes if env vars are missing during load
 let aiInstance: GoogleGenAI | null = null;
@@ -21,6 +21,14 @@ const getAiClient = () => {
     aiInstance = new GoogleGenAI({ apiKey: getApiKey() });
   }
   return aiInstance;
+};
+
+// --- Helper: Clean JSON ---
+const cleanJson = (text: string | undefined): string => {
+    if (!text) return "{}";
+    // Remove markdown code blocks if present (e.g. ```json ... ```)
+    let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return cleaned;
 };
 
 // --- Main Chat / Intelligent Matching ---
@@ -135,9 +143,7 @@ export const sendMessageToGemini = async (
       }
     });
 
-    const jsonText = response.text;
-    if (!jsonText) throw new Error("Empty response");
-    return JSON.parse(jsonText) as GeminiResponse;
+    return JSON.parse(cleanJson(response.text)) as GeminiResponse;
 
   } catch (error) {
     console.error("Gemini Interaction Error:", error);
@@ -149,12 +155,75 @@ export const sendMessageToGemini = async (
   }
 };
 
+// --- Intelligent Match Ranking ---
+
+export const calculateMatchScores = async (profile: FarmerProfile, listings: Listing[]): Promise<MatchInsight[]> => {
+    try {
+        const ai = getAiClient();
+        
+        // Prepare data for AI
+        const listingsPayload = listings.map(l => ({
+            id: l.id,
+            desc: l.description,
+            type: l.type,
+            features: l.features,
+            district: l.district,
+            soil: l.soilType,
+            water: l.waterSource
+        }));
+
+        const prompt = `
+            Act as an Agricultural Matchmaker for Lesotho.
+            
+            Farmer Profile:
+            - Wants to plant/use: ${profile.crops}
+            - Budget/Capacity: ${profile.budget}
+            - Preferred Districts: ${profile.preferredDistricts.join(', ')}
+
+            Task:
+            Evaluate the following listings and assign a Match Score (0-100) and a Short Reason (1 sentence in English/Sesotho mix) for each.
+            High scores should match crop requirements (e.g. Maize needs Loam soil) and Location.
+            
+            Listings:
+            ${JSON.stringify(listingsPayload)}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            listingId: { type: Type.STRING },
+                            score: { type: Type.INTEGER },
+                            reason: { type: Type.STRING }
+                        },
+                        required: ["listingId", "score", "reason"]
+                    }
+                }
+            }
+        });
+
+        const parsed = JSON.parse(cleanJson(response.text));
+        return parsed as MatchInsight[];
+
+    } catch (e) {
+        console.error("Match Score Error", e);
+        // Fallback: Return empty insights, UI should handle this gracefully (e.g. show random or default)
+        return [];
+    }
+};
+
 // --- Agreement Generation (Equipment & Land) ---
 
 export const generateAgreementSummary = async (
     history: ChatMessage[], 
     counterpartyName: string, 
-    listingId: string,
+    listingId: string, 
     category: 'LAND' | 'EQUIPMENT'
 ): Promise<Agreement> => {
     try {
@@ -218,7 +287,7 @@ export const generateAgreementSummary = async (
             }
         });
 
-        const parsed = JSON.parse(response.text || "{}");
+        const parsed = JSON.parse(cleanJson(response.text));
         
         return {
             id: `agr_${Date.now()}`,
@@ -294,7 +363,7 @@ export const generateListingFromImage = async (base64Image: string, category: 'L
             }
         });
         
-        const parsed = JSON.parse(response.text || "{}");
+        const parsed = JSON.parse(cleanJson(response.text));
         return {
             description: parsed.description || "",
             type: parsed.suggestedType || (category === 'LAND' ? "Masimo" : "Thepa"),

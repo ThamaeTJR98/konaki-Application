@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, CashBookEntry } from './types';
+import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, CashBookEntry, FarmerProfile } from './types';
 import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
 import { dataStore } from './services/dataStore';
 import RoleSelector from './components/RoleSelector';
@@ -10,6 +10,7 @@ import ListingDetails from './components/ListingDetails';
 import AgreementsView from './components/AgreementsView';
 import DisputesView from './components/DisputesView';
 import CashBookView from './components/CashBookView';
+import MatchingView from './components/MatchingView';
 import LiveVoiceOverlay from './components/LiveVoiceOverlay';
 import Logo from './components/Logo';
 import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS } from './constants';
@@ -21,6 +22,9 @@ const App: React.FC = () => {
   const [activeListing, setActiveListing] = useState<LandListing | null>(null);
   const [isGlobalAdvisorChat, setIsGlobalAdvisorChat] = useState(false); 
   
+  // Profile State
+  const [farmerProfile, setFarmerProfile] = useState<FarmerProfile | null>(null);
+
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatSessions, setChatSessions] = useState<Record<string, ChatMessage[]>>({});
@@ -133,6 +137,28 @@ const App: React.FC = () => {
                 setMessages([welcomeMsg]);
                 updateChatSession(sessionKey, [welcomeMsg]);
            }, 500);
+      }
+  };
+
+  const handleStartMatching = (profile: FarmerProfile) => {
+      setFarmerProfile(profile);
+      setViewState(ViewState.MATCHING);
+  };
+
+  const handleMatchLike = (listing: LandListing) => {
+      // It's a match! Open chat immediately
+      setActiveListing(listing);
+      setIsGlobalAdvisorChat(false);
+      setViewState(ViewState.CHAT);
+      
+      const sessionMessages = chatSessions[listing.id] || [];
+      setMessages(sessionMessages);
+      
+      // If new chat, auto send a "Hello" or "Match" message
+      if (sessionMessages.length === 0) {
+          setTimeout(() => {
+             handleSendMessage("Lumela! Ke bone 'match' ea rona ho Konaki. Ke kopa ho bua ka monyetla ona. (Hello! I saw our match via Konaki.)");
+          }, 500);
       }
   };
 
@@ -264,6 +290,8 @@ const App: React.FC = () => {
     } else if (viewState === ViewState.LISTING_DETAILS) {
         setActiveListing(null);
         setViewState(ViewState.DASHBOARD);
+    } else if (viewState === ViewState.MATCHING) {
+        setViewState(ViewState.DASHBOARD);
     } else {
         setRole(UserRole.NONE);
         setViewState(ViewState.ONBOARDING);
@@ -271,7 +299,6 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Add a small timeout to ensure the UI registers the tap before blocking with confirm
     setTimeout(() => {
         if (window.confirm("U batla ho tsoa? (Log out?)")) {
             setRole(UserRole.NONE);
@@ -285,7 +312,7 @@ const App: React.FC = () => {
   };
 
   const NavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
-    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS));
+    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS || viewState === ViewState.MATCHING));
     return (
       <button 
         onClick={() => {
@@ -305,7 +332,7 @@ const App: React.FC = () => {
   };
 
   const MobileNavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
-    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS));
+    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS || viewState === ViewState.MATCHING));
     return (
         <button 
             onClick={() => {
@@ -328,6 +355,11 @@ const App: React.FC = () => {
   if (viewState === ViewState.ONBOARDING || role === UserRole.NONE) {
     return <RoleSelector onSelectRole={handleRoleSelect} />;
   }
+  
+  // -- MATCHING VIEW --
+  if (viewState === ViewState.MATCHING && farmerProfile) {
+      return <MatchingView listings={listings} userProfile={farmerProfile} onLike={handleMatchLike} onClose={handleBackToDashboard} />;
+  }
 
   let MainContent;
   if (viewState === ViewState.DASHBOARD) {
@@ -338,6 +370,7 @@ const App: React.FC = () => {
         onAddListing={handleAddListing}
         onOpenAdvisor={handleOpenAdvisor}
         onStartLiveCall={() => setIsLiveCallActive(true)}
+        onStartMatching={handleStartMatching}
       />;
   } else if (viewState === ViewState.LISTING_DETAILS && activeListing) {
       MainContent = <ListingDetails 
@@ -353,7 +386,7 @@ const App: React.FC = () => {
   } else if (viewState === ViewState.CASHBOOK) {
       MainContent = <CashBookView initialEntries={cashBookEntries} onUpdate={handleUpdateCashBook} />;
   } else {
-      MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} />; 
+      MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} />; 
   }
 
   const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT;
@@ -368,6 +401,7 @@ const App: React.FC = () => {
       {/* Live Voice Overlay */}
       {isLiveCallActive && <LiveVoiceOverlay onClose={() => setIsLiveCallActive(false)} />}
       
+      {/* Sidebar (Desktop) */}
       <div className="hidden md:flex w-72 bg-green-900 text-white flex-col justify-between p-6 shadow-2xl z-30 shrink-0 no-print">
         <div>
             <div className="mb-10 flex items-center gap-3 px-2">
@@ -382,6 +416,7 @@ const App: React.FC = () => {
             
             <nav className="space-y-1">
                 <NavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
+                <NavButton targetView={ViewState.MATCHING} icon="🔥" label="Smart Match" />
                 <NavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Litumellano" />
                 <NavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka ea Lichelete" />
                 <NavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Likhohlano" />
@@ -418,7 +453,6 @@ const App: React.FC = () => {
                             ←
                         </button>
                         
-                        {/* Logo added here for sub-pages */}
                         <div className="w-8 h-8 mr-2 bg-white rounded-full p-1 shadow-sm shrink-0 flex items-center justify-center">
                             <Logo />
                         </div>
@@ -502,12 +536,13 @@ const App: React.FC = () => {
 
         </div>
 
-        {!isMobileChatActive && viewState !== ViewState.LISTING_DETAILS && (
+        {!isMobileChatActive && viewState !== ViewState.LISTING_DETAILS && viewState !== ViewState.MATCHING && (
             <div className="md:hidden bg-white border-t border-stone-200 flex justify-around items-center h-16 shrink-0 pb-safe z-30 shadow-[0_-8px_20px_-10px_rgba(0,0,0,0.1)] no-print">
                 <MobileNavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
-                <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Litumellano" />
+                <MobileNavButton targetView={ViewState.MATCHING} icon="🔥" label="Match" />
+                <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Tume" />
                 <MobileNavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka" />
-                <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Likhohlano" />
+                <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Thata" />
             </div>
         )}
 
