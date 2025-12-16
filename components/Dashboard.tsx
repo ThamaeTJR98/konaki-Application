@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserRole, Listing } from '../types';
 import { DISTRICTS } from '../constants';
@@ -18,16 +19,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
 
   // Form State
   const [newType, setNewType] = useState('Masimo');
-  const [newEquipmentType, setNewEquipmentType] = useState('Terekere'); // For Providers
+  const [newEquipmentType, setNewEquipmentType] = useState('Terekere'); 
   const [newDistrict, setNewDistrict] = useState(DISTRICTS[0]);
   const [newArea, setNewArea] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [coordinates, setCoordinates] = useState<{lat: number, lng: number} | null>(null);
+  const [isFormCVerified, setIsFormCVerified] = useState(false);
 
-  // Filter listings based on role interest
-  // Farmers see Land. Providers see Farmers (not impl in this mock, so Providers see their own list or requests).
-  // Landholders see other listings? For simplicity, everyone sees everything filtered by district.
   const filteredListings = listings.filter(l => {
       const matchDistrict = selectedDistrict === 'Bohle' || l.district === selectedDistrict;
       return matchDistrict;
@@ -73,7 +72,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
             ? "https://images.unsplash.com/photo-1592869675276-2f0851509923?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
             : "https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
         coordinates: coordinates || { lat: -29.31, lng: 27.48 },
-        price: newPrice || (isProvider ? "M2000 / day" : "Negotiable")
+        price: newPrice || (isProvider ? "M2000 / day" : "Negotiable"),
+        isVerified: isFormCVerified
     };
     onAddListing(listing);
     setShowAddModal(false);
@@ -83,6 +83,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
     setNewArea('');
     setCoordinates(null);
     setNewPrice('');
+    setIsFormCVerified(false);
   };
 
   const getWelcomeTitle = () => {
@@ -173,7 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
             </div>
         ) : (
             <div className="h-full w-full rounded-2xl overflow-hidden border border-stone-200 shadow-inner relative bg-stone-200">
-                {/* Embed OpenStreetMap centered on Lesotho (Lat -29.6, Lng 28.2) */}
                 <iframe 
                     width="100%" 
                     height="100%" 
@@ -186,7 +186,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                     title="Lesotho Map"
                 ></iframe>
                 
-                {/* Overlay Cards for Listings (Simulated pins) */}
                 <div className="absolute bottom-4 left-4 right-4 flex gap-4 overflow-x-auto pb-2 snap-x z-10">
                     {filteredListings.map(listing => (
                          <div 
@@ -307,6 +306,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                             {isLocating ? 'Ea batla...' : coordinates ? '📍 Location Saved' : '📍 Use GPS Location'}
                         </button>
                     </div>
+                    
+                    {role !== UserRole.PROVIDER && (
+                        <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                             <input 
+                                type="checkbox" 
+                                id="formC"
+                                checked={isFormCVerified}
+                                onChange={(e) => setIsFormCVerified(e.target.checked)}
+                                className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                             />
+                             <label htmlFor="formC" className="text-sm text-stone-700">
+                                 Ke na le <strong>Form C</strong> kapa Lease.
+                                 <span className="block text-xs text-stone-500">I have valid proof of allocation.</span>
+                             </label>
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-stone-600 mb-1">Tlhaloso (Description)</label>

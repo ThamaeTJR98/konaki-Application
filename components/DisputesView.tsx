@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Dispute, DisputeType } from '../types';
 import { generateDisputeAdvice } from '../services/geminiService';
@@ -20,7 +21,6 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
     e.preventDefault();
     setIsGettingAdvice(true);
     
-    // Get AI Advice before creating
     const advice = await generateDisputeAdvice(type, desc);
     
     const newDispute: Dispute = {
@@ -37,10 +37,52 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
     setIsGettingAdvice(false);
     setShowModal(false);
     
-    // Reset
     setTitle('');
     setDesc('');
     setType(DisputeType.DAMAGE);
+  };
+
+  const handlePrintReport = (dispute: Dispute) => {
+      // Mocking the print functionality for the Chief
+      const printWindow = window.open('', '', 'width=600,height=800');
+      if (printWindow) {
+          printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Tlaleho ea Khohlano - Morena</title>
+                    <style>
+                        body { font-family: serif; padding: 40px; }
+                        h1 { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; }
+                        .header { margin-bottom: 30px; }
+                        .content { line-height: 1.6; }
+                        .footer { margin-top: 50px; text-align: center; }
+                    </style>
+                </head>
+                <body>
+                    <h1>TLALEHO EA KHOHLANO EA MOBU</h1>
+                    <div class="header">
+                        <p><strong>Ho:</strong> Morena oa Sebaka / Local Council</p>
+                        <p><strong>Letsatsi:</strong> ${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div class="content">
+                        <p><strong>Mofuta oa Taba:</strong> ${dispute.type}</p>
+                        <p><strong>Sehlooho:</strong> ${dispute.title}</p>
+                        <p><strong>Tlhaloso:</strong></p>
+                        <p>${dispute.description}</p>
+                        <hr/>
+                        <p><strong>Keletso ea Molao (Konaki AI):</strong></p>
+                        <p><em>${dispute.aiAdvice}</em></p>
+                    </div>
+                    <div class="footer">
+                        <p>__________________________</p>
+                        <p>Moinwane (Signature)</p>
+                    </div>
+                </body>
+            </html>
+          `);
+          printWindow.document.close();
+          printWindow.print();
+      }
   };
 
   return (
@@ -93,7 +135,12 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
                 
                 <div className="mt-4 pt-4 border-t border-stone-100 flex justify-end gap-3 pl-14">
                     <button className="text-stone-500 text-sm hover:text-stone-800 font-medium">Koala (Resolve)</button>
-                    <button className="text-green-700 text-sm hover:text-green-900 font-bold">Ikopanye le Morena →</button>
+                    <button 
+                        onClick={() => handlePrintReport(dispute)}
+                        className="bg-stone-100 text-stone-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-stone-200 flex items-center gap-2"
+                    >
+                        🖨️ Hlahisa Tlaleho ea Morena
+                    </button>
                 </div>
             </div>
           ))

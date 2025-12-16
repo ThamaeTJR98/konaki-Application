@@ -1,3 +1,4 @@
+
 export enum UserRole {
   FARMER = 'SEHOAI',
   LANDHOLDER = 'MONGA_MOBU',
@@ -23,6 +24,7 @@ export interface Listing {
   coordinates?: { lat: number; lng: number };
   imageUrl?: string;
   price?: string; 
+  isVerified?: boolean; // New: Form C Verification Status
 
   // Land Specifics
   area?: string; // "3 Hectares"
@@ -62,11 +64,13 @@ export interface Agreement {
   };
 }
 
+// Updated to align with Land Act 2010 classifications
 export enum DisputeType {
-  BOUNDARY = "Meeli (Boundary)",
-  DAMAGE = "Lits'enyehelo (Damage by Animals)",
-  INHERITANCE = "Lifa (Inheritance)",
-  PAYMENT = "Tefo (Payment)",
+  BOUNDARY = "Meeli (Boundary Dispute - Sec 50)",
+  DAMAGE = "Lits'enyehelo (Damage to Crops)",
+  INHERITANCE = "Lifa (Inheritance - Sec 43)",
+  ALLOCATION = "Kabo (Allocation/Title Dispute)",
+  PAYMENT = "Tefo/Lichelete (Payment Dispute)",
   OTHER = "E 'ngoe (Other)"
 }
 
@@ -80,6 +84,15 @@ export interface Dispute {
   aiAdvice?: string; 
 }
 
+export interface CashBookEntry {
+  id: string;
+  date: string;
+  description: string; // "Thekiso ea Tamati"
+  amount: number;
+  type: 'INCOME' | 'EXPENSE'; // Chelete e keneng vs e tsoileng
+  category?: string; // "Peo", "Manyolo", "Thekiso"
+}
+
 export interface GeminiResponse {
   counterpartyReply?: string;
   konakiGuidance?: string;
@@ -91,5 +104,6 @@ export enum ViewState {
   LISTING_DETAILS,
   CHAT,
   AGREEMENTS,
-  DISPUTES
+  DISPUTES,
+  CASHBOOK // New View
 }

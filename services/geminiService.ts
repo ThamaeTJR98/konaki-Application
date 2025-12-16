@@ -2,8 +2,17 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { KONAKI_SYSTEM_INSTRUCTION } from "../constants";
 import { ChatMessage, GeminiResponse, Agreement } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini Client Lazily to avoid top-level crashes if env vars are missing during load
+let aiInstance: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+  if (!aiInstance) {
+    // We assume process.env.API_KEY is available via Vite's define or replacement
+    // If it's undefined, this might throw, but only when a function is CALLED, not when app LOADS.
+    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  }
+  return aiInstance;
+};
 
 export const sendMessageToGemini = async (
   history: ChatMessage[], 
@@ -12,6 +21,7 @@ export const sendMessageToGemini = async (
 ): Promise<GeminiResponse> => {
   
   try {
+    const ai = getAiClient();
     const contextPrompt = `
       User Role: ${currentUserRole}
       Counterparty Name: ${counterpartyName}
@@ -57,6 +67,7 @@ export const sendMessageToGemini = async (
 
 export const generateAgreementSummary = async (history: ChatMessage[], counterpartyName: string, listingId: string): Promise<Agreement> => {
     try {
+        const ai = getAiClient();
         const prompt = `
             Analyze the negotiation history between a User (Tenant) and ${counterpartyName} (Landholder).
             Extract specific legal terms for a Lesotho agricultural lease/sub-lease.
@@ -130,6 +141,7 @@ export const generateAgreementSummary = async (history: ChatMessage[], counterpa
 
 export const generateDisputeAdvice = async (type: string, description: string): Promise<string> => {
     try {
+        const ai = getAiClient();
         const prompt = `
             Provide brief, preliminary legal advice (in Sesotho) for a land dispute in Lesotho.
             Dispute Type: ${type}
@@ -155,6 +167,7 @@ export const generateDisputeAdvice = async (type: string, description: string): 
 
 export const transcribeAudio = async (audioBase64: string, mimeType: string): Promise<string> => {
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
@@ -173,6 +186,7 @@ export const transcribeAudio = async (audioBase64: string, mimeType: string): Pr
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: { parts: [{ text }] },

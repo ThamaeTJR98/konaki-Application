@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute } from './types';
 import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
@@ -7,6 +8,7 @@ import ChatInterface from './components/ChatInterface';
 import ListingDetails from './components/ListingDetails';
 import AgreementsView from './components/AgreementsView';
 import DisputesView from './components/DisputesView';
+import CashBookView from './components/CashBookView';
 import Logo from './components/Logo';
 import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS } from './constants';
 
@@ -18,7 +20,6 @@ const App: React.FC = () => {
   
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // Store chat history by listing ID: { "listing_1": [messages...], "listing_2": [...] }
   const [chatSessions, setChatSessions] = useState<Record<string, ChatMessage[]>>({});
   
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -75,7 +76,6 @@ const App: React.FC = () => {
 
   const handleStartChat = () => {
     if (!activeListing) return;
-    // Load existing chat session for this listing or start empty
     const sessionMessages = chatSessions[activeListing.id] || [];
     setMessages(sessionMessages);
     setViewState(ViewState.CHAT);
@@ -83,21 +83,10 @@ const App: React.FC = () => {
 
   const handleStartNegotiation = () => {
     if (!activeListing) return;
-    
-    // Switch to chat view
     setViewState(ViewState.CHAT);
-    
-    // Load existing messages first
     const sessionMessages = chatSessions[activeListing.id] || [];
     setMessages(sessionMessages);
-
-    // If it's a new conversation or doesn't look like a negotiation started recently, 
-    // inject the structured prompt.
-    // We send a specific message that asks for a structured conversation.
     const negotiationPrompt = "Ke kopa ho qala therisano ea tumellano ea khirisano. Re ka bua ka lintlha tsena: Nako (Duration), Tefo (Payment), le Tšebeliso (Land Use/Responsibilities)?";
-    
-    // We call the send handler which updates state and calls API
-    // We wrap in timeout to ensure state transitions settle if needed (optional but safer for view switches)
     setTimeout(() => {
         handleSendMessage(negotiationPrompt);
     }, 100);
@@ -139,14 +128,6 @@ const App: React.FC = () => {
       timestamp: Date.now()
     };
     
-    // Update UI immediately
-    // Note: We use the callback form of setMessages inside the update logic if possible, 
-    // but here we rely on the current 'messages' state which might be stale if called immediately after handleStartChat.
-    // However, since we setMessages in handleStartChat/Negotiation, we should be careful.
-    // Better practice: read from chatSessions directly or functional update.
-    
-    // Let's rely on the passed history + new message for the API call to ensure consistency
-    // We need to access the LATEST messages.
     const currentSessionMsgs = chatSessions[activeListing.id] || [];
     const updatedHistory = [...currentSessionMsgs, newUserMsg];
     
@@ -154,7 +135,6 @@ const App: React.FC = () => {
     
     setIsAiLoading(true);
 
-    // Call API
     const counterparty = activeListing.holderName || "Motho";
     const response = await sendMessageToGemini(updatedHistory, role, counterparty);
 
@@ -162,7 +142,6 @@ const App: React.FC = () => {
 
     const newMessages: ChatMessage[] = [];
 
-    // Add Counterparty response
     if (response.counterpartyReply) {
         newMessages.push({
             id: (Date.now() + 1).toString(),
@@ -172,7 +151,6 @@ const App: React.FC = () => {
         });
     }
 
-    // Add Konaki guidance if present
     if (response.konakiGuidance) {
         newMessages.push({
             id: (Date.now() + 2).toString(),
@@ -184,7 +162,6 @@ const App: React.FC = () => {
         setShowAiPanel(true);
     }
 
-    // Update with AI responses
     updateChatSession(activeListing.id, [...updatedHistory, ...newMessages]);
   };
 
@@ -200,10 +177,8 @@ const App: React.FC = () => {
 
   const goBack = () => {
     if (viewState === ViewState.CHAT) {
-        // Back from Chat goes to Details
         setViewState(ViewState.LISTING_DETAILS);
     } else if (viewState === ViewState.LISTING_DETAILS) {
-        // Back from Details goes to Dashboard
         setActiveListing(null);
         setViewState(ViewState.DASHBOARD);
     } else {
@@ -218,14 +193,12 @@ const App: React.FC = () => {
         localStorage.removeItem('konaki_role');
         setViewState(ViewState.ONBOARDING);
         setActiveListing(null);
-        setChatSessions({}); // Optional: clear chat on logout
+        setChatSessions({});
     }
   };
 
-  // Navigation Components
   const NavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
     const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS));
-    
     return (
       <button 
         onClick={() => {
@@ -263,13 +236,10 @@ const App: React.FC = () => {
     );
   };
 
-  // --- Layout Rendering ---
-
   if (viewState === ViewState.ONBOARDING || role === UserRole.NONE) {
     return <RoleSelector onSelectRole={handleRoleSelect} />;
   }
 
-  // Define Main Content Logic
   let MainContent;
   if (viewState === ViewState.DASHBOARD) {
       MainContent = <Dashboard 
@@ -289,19 +259,18 @@ const App: React.FC = () => {
       MainContent = <AgreementsView agreements={agreements} />;
   } else if (viewState === ViewState.DISPUTES) {
       MainContent = <DisputesView disputes={disputes} onAddDispute={handleAddDispute} />;
+  } else if (viewState === ViewState.CASHBOOK) {
+      MainContent = <CashBookView />;
   } else {
       MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} />; 
   }
 
-  // Desktop: Show chat in side panel
   const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT && activeListing !== null;
-  // Mobile: Chat is full screen
   const isMobileChatActive = viewState === ViewState.CHAT;
 
   return (
     <div className="fixed inset-0 w-full h-full bg-stone-50 flex flex-col md:flex-row overflow-hidden font-sans">
       
-      {/* Sidebar / Navigation for Desktop */}
       <div className="hidden md:flex w-72 bg-green-900 text-white flex-col justify-between p-6 shadow-2xl z-30 shrink-0 no-print">
         <div>
             <div className="mb-10 flex items-center gap-3 px-2">
@@ -317,6 +286,7 @@ const App: React.FC = () => {
             <nav className="space-y-1">
                 <NavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
                 <NavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Litumellano" />
+                <NavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka ea Lichelete" />
                 <NavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Likhohlano" />
             </nav>
         </div>
@@ -340,10 +310,8 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Layout Area */}
       <div className="flex-1 flex flex-col relative h-full overflow-hidden">
         
-        {/* Mobile Header */}
         <div className="md:hidden bg-green-900 text-white px-4 h-16 shrink-0 z-20 flex items-center justify-between shadow-md no-print">
              {isMobileChatActive || viewState === ViewState.LISTING_DETAILS ? (
                  <>
@@ -378,10 +346,8 @@ const App: React.FC = () => {
              )}
         </div>
 
-        {/* Workspace (Desktop Split View Logic) */}
         <div className="flex-1 flex overflow-hidden relative w-full bg-stone-50">
             
-            {/* Primary View (Dashboard/Agreements/Disputes/Details) */}
             <div className={`flex flex-col h-full transition-all duration-300 ease-in-out ${
                 isMobileChatActive ? 'hidden' : 'flex-1 w-full'
             } ${
@@ -390,7 +356,6 @@ const App: React.FC = () => {
                  {MainContent}
             </div>
 
-            {/* Secondary View (Chat) */}
             {(isMobileChatActive || isDesktopChatVisible) && (
                 <div className={`bg-white h-full flex flex-col shadow-xl z-10 no-print ${
                     isMobileChatActive ? 'absolute inset-0 w-full' : ''
@@ -409,7 +374,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* AI Guidance Panel (Extra Context on large screens) */}
             <div className={`hidden 2xl:flex w-80 bg-amber-50/50 border-l border-amber-100 flex-col p-6 backdrop-blur-sm no-print ${showAiPanel ? 'block' : 'hidden'}`}>
                 <h3 className="text-amber-900 font-bold mb-6 flex items-center gap-2 uppercase text-xs tracking-wider">
                     <span className="text-lg">🤖</span> Konaki Insights
@@ -430,11 +394,11 @@ const App: React.FC = () => {
 
         </div>
 
-        {/* Mobile Bottom Navigation */}
         {!isMobileChatActive && viewState !== ViewState.LISTING_DETAILS && (
             <div className="md:hidden bg-white border-t border-stone-200 flex justify-around items-center h-16 shrink-0 pb-safe z-30 shadow-[0_-8px_20px_-10px_rgba(0,0,0,0.1)] no-print">
                 <MobileNavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
                 <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Litumellano" />
+                <MobileNavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka" />
                 <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Likhohlano" />
             </div>
         )}
