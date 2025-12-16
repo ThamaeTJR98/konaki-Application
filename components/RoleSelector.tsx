@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { UserRole } from '../types';
 import Logo from './Logo';
@@ -8,8 +9,15 @@ interface RoleSelectorProps {
 
 const RoleSelector: React.FC<RoleSelectorProps> = ({ onSelectRole }) => {
   return (
-    <div className="flex min-h-[100dvh] bg-stone-50 font-sans">
+    <div className="flex min-h-[100dvh] bg-stone-50 font-sans relative">
       
+      {/* Mobile Logo: Absolute Top Left */}
+      <div className="absolute top-6 left-6 lg:hidden z-10">
+         <div className="w-12 h-12 bg-white rounded-full p-2 shadow-md border border-stone-100 flex items-center justify-center">
+            <Logo />
+         </div>
+      </div>
+
       {/* Left Panel - Brand (Hidden on small mobile) */}
       <div className="hidden lg:flex w-1/2 bg-green-900 relative overflow-hidden items-center justify-center">
         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
@@ -27,13 +35,11 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onSelectRole }) => {
       </div>
 
       {/* Right Panel - Selection */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative pt-24 lg:pt-6">
          <div className="w-full max-w-md space-y-8 animate-fade-in-up">
             
             <div className="text-center lg:text-left">
-                <div className="lg:hidden w-20 h-20 mx-auto mb-4 bg-white rounded-full p-2 shadow-lg">
-                    <Logo />
-                </div>
+                {/* Previous centered logo removed in favor of absolute top-left for mobile */}
                 <h2 className="text-3xl font-bold text-stone-900 mb-2">Rea U Amohela!</h2>
                 <p className="text-stone-500">
                     Welcome! Please select how you will use Konaki AI today.

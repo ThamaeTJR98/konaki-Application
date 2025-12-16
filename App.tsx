@@ -413,23 +413,29 @@ const App: React.FC = () => {
         <div className="md:hidden bg-green-900 text-white px-4 h-16 shrink-0 z-[2000] flex items-center justify-between shadow-md no-print relative">
              {isMobileChatActive || viewState === ViewState.LISTING_DETAILS ? (
                  <>
-                    <button onClick={goBack} className="p-2 -ml-2 text-2xl active:opacity-70 mr-2 rounded-full hover:bg-white/10">
-                        ←
-                    </button>
-                    {isGlobalAdvisorChat ? (
-                        <div className="font-bold">Konaki Advisor</div>
-                    ) : activeListing ? (
-                        <div className="flex items-center flex-1 overflow-hidden">
+                    <div className="flex items-center flex-1 overflow-hidden">
+                        <button onClick={goBack} className="p-2 -ml-2 text-2xl active:opacity-70 mr-2 rounded-full hover:bg-white/10 shrink-0">
+                            ←
+                        </button>
+                        
+                        {/* Logo added here for sub-pages */}
+                        <div className="w-8 h-8 mr-2 bg-white rounded-full p-1 shadow-sm shrink-0 flex items-center justify-center">
+                            <Logo />
+                        </div>
+
+                        {isGlobalAdvisorChat ? (
+                            <div className="font-bold truncate">Konaki Advisor</div>
+                        ) : activeListing ? (
                             <div className="flex-1 overflow-hidden">
                                 <h2 className="font-bold text-sm truncate leading-tight">{activeListing.holderName}</h2>
                                 <p className="text-[10px] text-green-300 truncate uppercase">
                                     {activeListing.type}
                                 </p>
                             </div>
-                        </div>
-                    ) : (
-                        <span className="font-bold">Lintlha (Details)</span>
-                    )}
+                        ) : (
+                            <span className="font-bold">Lintlha (Details)</span>
+                        )}
+                    </div>
                  </>
              ) : (
                  <>
