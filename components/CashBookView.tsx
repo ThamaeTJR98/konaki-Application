@@ -1,18 +1,30 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CashBookEntry } from '../types';
+import { analyzeCashBook } from '../services/geminiService';
+import Logo from './Logo';
 
-const CashBookView: React.FC = () => {
-  const [entries, setEntries] = useState<CashBookEntry[]>([
-    { id: '1', date: '2024-05-01', description: 'Thekiso ea Poone', amount: 2500, type: 'INCOME', category: 'Sales' },
-    { id: '2', date: '2024-05-03', description: 'Reka Manyolo (Fertilizer)', amount: 800, type: 'EXPENSE', category: 'Inputs' },
-    { id: '3', date: '2024-05-05', description: 'Tefo ea Terekere', amount: 500, type: 'EXPENSE', category: 'Labor' },
-  ]);
+interface CashBookViewProps {
+    initialEntries: CashBookEntry[];
+    onUpdate: (entries: CashBookEntry[]) => void;
+}
+
+const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate }) => {
+  const [entries, setEntries] = useState<CashBookEntry[]>(initialEntries);
+
+  // Sync when prop changes (loading from DB)
+  useEffect(() => {
+      setEntries(initialEntries);
+  }, [initialEntries]);
 
   const [newDesc, setNewDesc] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState<'INCOME' | 'EXPENSE'>('INCOME');
   const [showAddModal, setShowAddModal] = useState(false);
+  
+  // AI State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
   const totalIncome = entries.filter(e => e.type === 'INCOME').reduce((sum, e) => sum + e.amount, 0);
   const totalExpense = entries.filter(e => e.type === 'EXPENSE').reduce((sum, e) => sum + e.amount, 0);
@@ -31,18 +43,60 @@ const CashBookView: React.FC = () => {
           category: 'General'
       };
 
-      setEntries([entry, ...entries]);
+      const updated = [entry, ...entries];
+      setEntries(updated);
+      onUpdate(updated);
+
       setNewDesc('');
       setNewAmount('');
       setShowAddModal(false);
+      setAnalysisResult(null); // Reset analysis on new data
+  };
+
+  const handleAnalyze = async () => {
+      if (entries.length === 0) {
+          alert("Kenya litlaleho pele u kopa tlhahlobo.");
+          return;
+      }
+      setIsAnalyzing(true);
+      const advice = await analyzeCashBook(entries);
+      setAnalysisResult(advice);
+      setIsAnalyzing(false);
   };
 
   return (
     <div className="h-full overflow-y-auto bg-stone-50 p-4 sm:p-6 pb-24">
-       <div className="mb-6 max-w-4xl mx-auto">
-        <h2 className="text-2xl font-bold text-stone-900">Buka ea Lichelete (Cash Book)</h2>
-        <p className="text-stone-500 text-sm">Boloka litlaleho tsa khoebo ea hau. (Keep records to track profit).</p>
+       <div className="mb-6 max-w-4xl mx-auto flex justify-between items-start">
+        <div>
+            <h2 className="text-2xl font-bold text-stone-900">Buka ea Lichelete (Cash Book)</h2>
+            <p className="text-stone-500 text-sm">Boloka litlaleho tsa khoebo ea hau. (Keep records to track profit).</p>
+        </div>
+        <button 
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="bg-amber-100 text-amber-800 border border-amber-200 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-200 transition-colors flex items-center gap-2"
+        >
+            {isAnalyzing ? (
+                 <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></span>
+            ) : (
+                 <div className="w-5 h-5"><Logo isSpeaking={false} /></div>
+            )}
+            Hlahloba (Analyze)
+        </button>
       </div>
+
+      {/* AI Analysis Result */}
+      {analysisResult && (
+          <div className="max-w-4xl mx-auto mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm flex gap-4 animate-fade-in">
+              <div className="w-10 h-10 shrink-0">
+                  <Logo isSpeaking={true} />
+              </div>
+              <div>
+                  <h4 className="font-bold text-amber-900 text-sm uppercase mb-1">Keletso ea Konaki</h4>
+                  <p className="text-amber-950 text-sm italic leading-relaxed">{analysisResult}</p>
+              </div>
+          </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3 mb-8 max-w-4xl mx-auto">

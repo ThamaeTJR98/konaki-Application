@@ -1,19 +1,22 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { ChatMessage, UserRole } from '../types';
 import { transcribeAudio, generateSpeech } from '../services/geminiService';
 import { playPcmAudio } from '../services/audioService';
+import Logo from './Logo';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, attachment?: string) => void;
   onFinalizeAgreement?: () => void;
   onClose?: () => void;
   isLoading: boolean;
   activeRole: UserRole;
   counterpartyName: string;
+  suggestions?: string[];
 }
 
-const SUGGESTED_ACTIONS = [
+const INITIAL_SUGGESTIONS = [
     "Ke kopa ho bona mobu (Request Site Visit)",
     "Na metsi a teng? (Is water available?)",
     "Re ka arolelana kotulo? (Sharecropping proposal)",
@@ -27,17 +30,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onClose, 
   isLoading, 
   activeRole, 
-  counterpartyName 
+  counterpartyName,
+  suggestions
 }) => {
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,9 +61,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [inputText]);
 
   const handleSend = () => {
-    if (inputText.trim()) {
-      onSendMessage(inputText);
+    if (inputText.trim() || attachment) {
+      onSendMessage(inputText, attachment || undefined);
       setInputText('');
+      setAttachment(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     }
   };
@@ -71,6 +78,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+          setAttachment(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      // Reset input
+      if(fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // --- Voice Input Logic ---
@@ -145,6 +165,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setPlayingMessageId(null);
   };
 
+  // Determine suggestions to show
+  const activeSuggestions = (suggestions && suggestions.length > 0) ? suggestions : (messages.length === 0 ? INITIAL_SUGGESTIONS : []);
+
   return (
     <div className="flex flex-col h-full bg-stone-50 relative border-l border-stone-200">
       {/* Chat Header */}
@@ -186,16 +209,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 sm:space-y-6 scrollbar-hide bg-stone-50">
         {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-stone-400 opacity-60">
-                <div className="w-16 h-16 bg-stone-200 rounded-full flex items-center justify-center mb-4 text-3xl">💬</div>
+                <div className="w-24 h-24 mb-6 opacity-80">
+                    <Logo />
+                </div>
                 <p className="text-sm font-medium">Qala puisano le {counterpartyName} mona.</p>
                 
                 <div className="mt-8 flex flex-col gap-2 w-full max-w-xs">
                     <p className="text-xs text-center uppercase tracking-wide text-stone-300 font-bold">Leka ho botsa (Try asking):</p>
-                    {SUGGESTED_ACTIONS.slice(0, 2).map((action, idx) => (
+                    {INITIAL_SUGGESTIONS.slice(0, 2).map((action, idx) => (
                         <button 
                             key={idx}
                             onClick={() => handleQuickAction(action)}
-                            className="bg-white border border-stone-200 p-2 rounded-lg text-xs text-stone-600 hover:bg-green-50 hover:border-green-200 transition-colors text-center"
+                            className="bg-white border border-stone-200 p-3 rounded-xl text-xs text-stone-600 hover:bg-green-50 hover:text-green-800 hover:border-green-200 transition-all shadow-sm font-medium"
                         >
                             {action}
                         </button>
@@ -210,25 +235,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           if (msg.sender === 'user') {
             return (
               <div key={msg.id} className="flex justify-end animate-fade-in-up">
-                <div className="max-w-[85%] sm:max-w-[75%] bg-gradient-to-br from-green-600 to-green-700 text-white p-3.5 rounded-2xl rounded-tr-sm shadow-md text-sm sm:text-base">
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                  <span className="text-[10px] opacity-70 block text-right mt-1 font-medium">Uena</span>
+                <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
+                    {msg.attachment && (
+                        <div className="mb-1 rounded-xl overflow-hidden shadow-sm border border-stone-200">
+                             <img src={msg.attachment} alt="Attachment" className="max-h-48 object-cover" />
+                        </div>
+                    )}
+                    <div className="bg-gradient-to-br from-green-700 to-green-800 text-white p-3.5 rounded-2xl rounded-tr-sm shadow-md text-sm sm:text-base">
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        <span className="text-[10px] opacity-70 block text-right mt-1 font-medium">Uena</span>
+                    </div>
                 </div>
               </div>
             );
           } else if (msg.sender === 'konaki') {
             return (
               <div key={msg.id} className="flex justify-center my-2 sm:my-4 animate-fade-in">
-                <div className="max-w-[95%] sm:max-w-[90%] bg-amber-50/80 backdrop-blur-sm border border-amber-200 p-3 sm:p-4 rounded-xl shadow-sm flex gap-3">
-                   <div className="text-2xl pt-1">🤖</div>
+                <div className="max-w-[95%] sm:max-w-[90%] bg-orange-50/80 backdrop-blur-sm border border-orange-100 p-3 sm:p-4 rounded-xl shadow-sm flex gap-3">
+                   <div className="w-10 h-10 shrink-0">
+                       <Logo isSpeaking={isPlaying} />
+                   </div>
                    <div className="flex-1">
-                       <h4 className="font-bold text-amber-800 text-xs sm:text-sm mb-1 uppercase tracking-wide">Keletso ea Konaki</h4>
-                       <p className="text-amber-900 text-xs sm:text-sm leading-relaxed italic">"{msg.text}"</p>
+                       <h4 className="font-bold text-amber-900 text-xs sm:text-sm mb-1 uppercase tracking-wide">Keletso ea Konaki</h4>
+                       <p className="text-amber-950 text-xs sm:text-sm leading-relaxed italic">"{msg.text}"</p>
                    </div>
                    <button 
                       onClick={() => playMessageAudio(msg.text, msg.id)}
                       disabled={!!playingMessageId}
-                      className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isPlaying ? 'bg-amber-200 text-amber-800' : 'text-amber-400 hover:bg-amber-100'}`}
+                      className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isPlaying ? 'bg-orange-200 text-orange-900' : 'text-orange-400 hover:bg-orange-100'}`}
                    >
                      {isPlaying ? '🔊' : '🔈'}
                    </button>
@@ -258,12 +292,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         
         {isLoading && (
             <div className="flex justify-start">
-                <div className="bg-white border border-stone-100 p-4 rounded-2xl rounded-tl-sm shadow-sm">
-                    <div className="flex space-x-1.5">
-                        <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                <div className="bg-white border border-stone-100 p-4 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-3">
+                    <div className="w-8 h-8">
+                        <Logo isThinking={true} />
                     </div>
+                    <div className="text-xs text-stone-400 italic font-medium animate-pulse">Konaki ea nahana...</div>
                 </div>
             </div>
         )}
@@ -279,14 +312,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggested Actions (Chips) */}
-      {!isLoading && messages.length > 0 && (
-          <div className="bg-stone-50 p-2 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-2 border-t border-stone-100 px-4">
-              {SUGGESTED_ACTIONS.map((action, idx) => (
+      {/* Suggested Actions (Chips) - Only show if not loading */}
+      {!isLoading && activeSuggestions.length > 0 && !attachment && (
+          <div className="bg-stone-50 p-3 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-2 border-t border-stone-100 px-4 items-center">
+              <span className="text-[10px] font-bold text-stone-400 uppercase mr-1">Karabo:</span>
+              {activeSuggestions.map((action, idx) => (
                   <button 
                     key={idx}
                     onClick={() => handleQuickAction(action)}
-                    className="inline-block bg-white border border-stone-200 px-3 py-1 rounded-full text-xs text-stone-600 hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors shadow-sm"
+                    className="inline-block bg-white border border-stone-200 px-4 py-2 rounded-full text-xs text-stone-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all shadow-sm font-medium"
                   >
                       {action}
                   </button>
@@ -307,7 +341,29 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
              </div>
         )}
 
+        {attachment && (
+            <div className="mx-auto max-w-4xl mb-2 flex items-start gap-2 bg-stone-50 p-2 rounded-xl border border-stone-200">
+                 <img src={attachment} alt="Preview" className="h-16 w-16 object-cover rounded-lg" />
+                 <div className="flex-1">
+                     <p className="text-xs text-stone-500 font-bold mb-1">Image Attached</p>
+                     <button onClick={() => setAttachment(null)} className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                 </div>
+            </div>
+        )}
+
         <div className="flex items-end gap-2 max-w-4xl mx-auto">
+            {/* Image Upload Button */}
+            <label className="p-3 rounded-full bg-stone-50 border border-stone-200 text-stone-400 hover:bg-stone-100 hover:text-stone-600 cursor-pointer transition-colors flex-shrink-0">
+                <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                />
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </label>
+
             <button 
                 onClick={toggleRecording}
                 disabled={isTranscribing || isLoading}
@@ -339,9 +395,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             
             <button 
                 onClick={handleSend}
-                disabled={!inputText.trim() || isLoading || isRecording}
+                disabled={(!inputText.trim() && !attachment) || isLoading || isRecording}
                 className={`p-3 rounded-full transition-all flex-shrink-0 shadow-sm ${
-                    !inputText.trim() || isLoading || isRecording
+                    (!inputText.trim() && !attachment) || isLoading || isRecording
                     ? 'bg-stone-100 text-stone-300' 
                     : 'bg-green-600 text-white hover:bg-green-700 hover:scale-105 shadow-md'
                 }`}

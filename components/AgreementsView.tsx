@@ -1,12 +1,15 @@
+
 import React, { useState, useRef } from 'react';
 import { Agreement } from '../types';
 
 interface AgreementsViewProps {
   agreements: Agreement[];
+  onUpdateAgreement?: (agreement: Agreement) => void;
 }
 
-const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
+const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgreement }) => {
   const [signingId, setSigningId] = useState<string | null>(null);
+  const [signingRole, setSigningRole] = useState<'tenant' | 'landholder'>('tenant');
   
   // Signature Pad State
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,8 +20,9 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
     window.print();
   };
 
-  const startSigning = (id: string) => {
+  const startSigning = (id: string, role: 'tenant' | 'landholder') => {
     setSigningId(id);
+    setSigningRole(role);
     setHasSignature(false);
     // Short delay to allow modal to render before accessing canvas context
     setTimeout(() => {
@@ -78,14 +82,32 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
   };
 
   const saveSignature = () => {
-      if(!hasSignature || !signingId) return;
+      if(!hasSignature || !signingId || !onUpdateAgreement) return;
       const canvas = canvasRef.current;
       const dataUrl = canvas?.toDataURL();
       
-      // In a real app, we would update state here.
-      // For this mock, we force a re-render or alert success.
-      // We will just alert for now as we don't have a global setAgreements here easily without prop drilling.
-      alert("Signature Saved! (Functionality mocked for this demo)");
+      // Find agreement
+      const agreementToUpdate = agreements.find(a => a.id === signingId);
+      if (agreementToUpdate && dataUrl) {
+          const updated: Agreement = {
+              ...agreementToUpdate,
+              signatures: {
+                  ...agreementToUpdate.signatures,
+                  [signingRole]: dataUrl
+              }
+          };
+          
+          // Check if both signed, then mark active
+          const tenantSigned = signingRole === 'tenant' ? true : !!updated.signatures?.tenant;
+          const holderSigned = signingRole === 'landholder' ? true : !!updated.signatures?.landholder;
+          
+          if (tenantSigned && holderSigned) {
+              updated.status = 'Signed';
+          }
+
+          onUpdateAgreement(updated);
+      }
+      
       setSigningId(null);
   };
 
@@ -101,63 +123,113 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
           agreements.map(agreement => (
             <div key={agreement.id} className="print-content bg-white rounded-none shadow-lg border border-stone-200 relative overflow-hidden print:shadow-none animate-fade-in break-after-page mb-8">
                 {/* Paper Texture Header */}
-                <div className="h-2 bg-green-700 w-full"></div>
+                <div className={`h-3 w-full border-b-2 border-stone-200 ${agreement.listingCategory === 'EQUIPMENT' ? 'bg-orange-800' : 'bg-green-900'}`}></div>
                 <div className="p-8 sm:p-12">
                     
-                    {/* Header */}
-                    <div className="flex justify-between items-start mb-8 border-b-2 border-stone-100 pb-6">
-                        <div>
-                            <div className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">State of Lesotho</div>
-                            <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">{agreement.title}</h3>
-                            <p className="text-stone-500 text-sm mt-1">Ref: {agreement.id} | Date: {agreement.dateCreated}</p>
-                        </div>
-                        <div className={`px-4 py-2 border-2 text-sm font-bold uppercase tracking-wider transform -rotate-2 ${
-                            agreement.status === 'Active' ? 'border-green-600 text-green-700' : 
-                            agreement.status === 'Draft' ? 'border-amber-400 text-amber-500' : 'border-stone-300 text-stone-400'
-                        }`}>
-                            {agreement.status}
-                        </div>
+                    {/* Official Legal Preamble */}
+                    <div className="text-center mb-8 pb-4 border-b-2 border-stone-900">
+                         <div className="text-sm font-bold uppercase tracking-widest text-stone-500 mb-2">The Kingdom of Lesotho</div>
+                         <h3 className="font-serif text-3xl font-black text-stone-900 uppercase mb-1">{agreement.title}</h3>
+                         <p className="text-xs text-stone-500 font-medium">Made in accordance with the <strong>Land Act 2010</strong></p>
                     </div>
 
-                    {/* Parties */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
-                        <div className="bg-stone-50 p-4 border border-stone-100 print:bg-transparent print:border-black">
-                            <h4 className="text-xs font-bold text-stone-400 uppercase mb-2">Landholder (Mong'a Mobu)</h4>
-                            <p className="font-serif text-lg text-stone-900">{agreement.parties.landholder}</p>
-                        </div>
-                        <div className="bg-stone-50 p-4 border border-stone-100 print:bg-transparent print:border-black">
-                            <h4 className="text-xs font-bold text-stone-400 uppercase mb-2">Tenant (Hiriso)</h4>
-                            <p className="font-serif text-lg text-stone-900">{agreement.parties.tenant}</p>
+                    {/* Meta Data */}
+                    <div className="flex justify-between items-center mb-8 text-xs font-mono text-stone-500">
+                        <span>REF: {agreement.id.toUpperCase()}</span>
+                        <span>DATE: {agreement.dateCreated}</span>
+                        <span className={`px-2 py-0.5 border ${agreement.status === 'Signed' ? 'border-green-600 text-green-700' : 'border-amber-400 text-amber-600'} rounded font-bold`}>
+                            STATUS: {agreement.status.toUpperCase()}
+                        </span>
+                    </div>
+
+                    {/* Parties Section */}
+                    <div className="mb-8 bg-stone-50 p-6 border border-stone-200">
+                        <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider mb-4 border-b border-stone-200 pb-2">Parties to the Agreement</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                            <div>
+                                <p className="text-xs text-stone-500 uppercase font-bold mb-1">Provider / Landholder (Mofani)</p>
+                                <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.landholder}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-stone-500 uppercase font-bold mb-1">Tenant / Client (Moamoheli)</p>
+                                <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.tenant}</p>
+                            </div>
                         </div>
                     </div>
 
                     {/* Terms / Clauses */}
-                    <div className="space-y-6">
-                        <h4 className="font-bold text-stone-900 border-b border-stone-200 pb-2 mb-4">Terms of Agreement</h4>
+                    <div className="space-y-6 mb-10">
+                        <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider border-b border-stone-200 pb-2 mb-4">Terms & Conditions</h4>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <ClauseItem label="Nako (Duration)" value={agreement.clauses.duration} />
-                            <ClauseItem label="Tefo / Karolo (Payment)" value={agreement.clauses.paymentTerms} />
-                            <ClauseItem label="Tšebeliso (Permitted Use)" value={agreement.clauses.landUse} />
-                            <ClauseItem label="Qetello (Termination)" value={agreement.clauses.termination} />
+                        <div className="grid grid-cols-1 gap-4">
+                            <ClauseItem number="1" label="Nako (Duration)" value={agreement.clauses.duration} />
+                            <ClauseItem number="2" label="Tefo (Payment Terms)" value={agreement.clauses.paymentTerms} />
+                            
+                            {/* Conditional Rendering based on type */}
+                            {agreement.clauses.landUse && (
+                                <ClauseItem number="3" label="Tšebeliso (Permitted Land Use)" value={agreement.clauses.landUse} />
+                            )}
+                            {agreement.clauses.fuelPolicy && (
+                                <ClauseItem number="3" label="Mafura (Fuel Policy)" value={agreement.clauses.fuelPolicy} />
+                            )}
+                            {agreement.clauses.operatorIncluded && (
+                                <ClauseItem number="4" label="Mokhanni (Operator)" value={agreement.clauses.operatorIncluded} />
+                            )}
+                            {agreement.clauses.damageLiability && (
+                                <ClauseItem number="5" label="Tšenyo (Damage Liability)" value={agreement.clauses.damageLiability} />
+                            )}
+                             <ClauseItem number="6" label="Qetello (Termination)" value={agreement.clauses.termination} />
+                             
+                             <div className="mt-4 pt-4 text-xs text-stone-500 italic">
+                                 * This agreement is binding upon the parties and their successors in title. Disputes shall be referred to the Local Council.
+                             </div>
                         </div>
                     </div>
 
                     {/* Signatures */}
-                    <div className="mt-12 pt-8 border-t border-stone-200 grid grid-cols-2 gap-12 break-inside-avoid">
-                         <div className="relative">
-                            <div className="h-20 border-b border-stone-400 mb-2 flex items-end">
-                                {/* If we had a saved signature, we would display image here */}
-                                <span className="text-stone-300 text-4xl font-serif italic opacity-30 px-2">Sign Here</span>
-                            </div>
-                            <p className="text-xs text-stone-500 uppercase">Signature of Landholder</p>
+                    <div className="mt-12 pt-8 border-t-2 border-stone-900 break-inside-avoid">
+                         <h4 className="font-bold text-stone-900 uppercase text-center text-xs tracking-wider mb-8">Signatures of Parties</h4>
+                         
+                         <div className="grid grid-cols-2 gap-12 mb-12">
+                             {/* Provider */}
+                             <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.landholder && startSigning(agreement.id, 'landholder')}>
+                                <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">
+                                    {agreement.signatures?.landholder ? (
+                                        <img src={agreement.signatures.landholder} alt="Signed" className="max-h-20 mix-blend-multiply" />
+                                    ) : (
+                                        <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-stone-900 uppercase font-bold">Provider / Landholder</p>
+                                <p className="text-[10px] text-stone-500">Date: .......................................</p>
+                             </div>
+                             
+                             {/* Tenant */}
+                             <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.tenant && startSigning(agreement.id, 'tenant')}>
+                                <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">
+                                    {agreement.signatures?.tenant ? (
+                                        <img src={agreement.signatures.tenant} alt="Signed" className="max-h-20 mix-blend-multiply" />
+                                    ) : (
+                                        <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-stone-900 uppercase font-bold">Tenant / Client</p>
+                                <p className="text-[10px] text-stone-500">Date: .......................................</p>
+                             </div>
                          </div>
-                         <div>
-                            <div className="h-20 border-b border-stone-400 mb-2 flex items-end">
-                                <span className="text-stone-300 text-4xl font-serif italic opacity-30 px-2">Sign Here</span>
-                            </div>
-                            <p className="text-xs text-stone-500 uppercase">Signature of Tenant</p>
+
+                         {/* Witnesses */}
+                         <div className="grid grid-cols-2 gap-12 opacity-70">
+                             <div>
+                                <div className="h-12 border-b border-stone-400 mb-1"></div>
+                                <p className="text-[10px] text-stone-500 uppercase">Witness 1 (Name & Sign)</p>
+                             </div>
+                             <div>
+                                <div className="h-12 border-b border-stone-400 mb-1"></div>
+                                <p className="text-[10px] text-stone-500 uppercase">Witness 2 (Name & Sign)</p>
+                             </div>
                          </div>
+
                     </div>
 
                 </div>
@@ -166,17 +238,29 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
                 <div className="bg-stone-50 p-4 px-8 border-t border-stone-200 flex justify-end gap-3 no-print">
                     <button 
                         onClick={handleDownload}
-                        className="px-4 py-2 bg-white border border-stone-300 rounded text-sm font-medium hover:bg-stone-100 transition-colors"
+                        className="px-4 py-2 bg-white border border-stone-300 rounded text-sm font-medium hover:bg-stone-100 transition-colors flex items-center gap-2"
                     >
-                        🖨️ Print / Save as PDF
+                        <span>🖨️</span> Print / Save PDF
                     </button>
-                    {agreement.status !== 'Signed' && (
-                        <button 
-                            onClick={() => startSigning(agreement.id)}
-                            className="px-4 py-2 bg-green-700 text-white rounded text-sm font-bold hover:bg-green-800 transition-colors shadow-sm"
-                        >
-                            🖋️ Sign Digitally
-                        </button>
+                    {agreement.status !== 'Signed' && onUpdateAgreement && (
+                         <div className="flex gap-2">
+                             {!agreement.signatures?.landholder && (
+                                <button 
+                                    onClick={() => startSigning(agreement.id, 'landholder')}
+                                    className="px-4 py-2 bg-stone-200 text-stone-700 rounded text-sm font-bold hover:bg-stone-300 transition-colors"
+                                >
+                                    Sign (Provider)
+                                </button>
+                             )}
+                             {!agreement.signatures?.tenant && (
+                                <button 
+                                    onClick={() => startSigning(agreement.id, 'tenant')}
+                                    className="px-4 py-2 bg-green-700 text-white rounded text-sm font-bold hover:bg-green-800 transition-colors shadow-sm"
+                                >
+                                    Sign (Tenant)
+                                </button>
+                             )}
+                         </div>
                     )}
                 </div>
             </div>
@@ -194,7 +278,9 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
       {signingId && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-xl w-full max-w-lg p-6 animate-fade-in-up">
-                <h3 className="text-xl font-bold text-stone-900 mb-2">Beha Menoana (Sign Here)</h3>
+                <h3 className="text-xl font-bold text-stone-900 mb-2">
+                    {signingRole === 'tenant' ? 'Menoana ea Hiriso (Tenant Sign)' : "Menoana ea Mong'a Mobu (Provider Sign)"}
+                </h3>
                 <p className="text-stone-500 text-sm mb-4">Please draw your signature below using your finger or mouse.</p>
                 
                 <div className="border-2 border-dashed border-stone-300 rounded-lg mb-4 bg-stone-50 touch-none">
@@ -238,10 +324,13 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements }) => {
   );
 };
 
-const ClauseItem = ({ label, value }: { label: string, value: string }) => (
-    <div className="mb-2">
-        <span className="block text-xs font-bold text-stone-500 uppercase mb-1">{label}</span>
-        <span className="block font-serif text-stone-900 leading-relaxed border-l-2 border-green-500 pl-3">{value}</span>
+const ClauseItem = ({ number, label, value }: { number: string, label: string, value: string }) => (
+    <div className="flex gap-4 items-start">
+        <span className="font-mono text-stone-400 font-bold pt-1">{number}.</span>
+        <div className="flex-1">
+            <span className="block text-xs font-bold text-stone-600 uppercase mb-1">{label}</span>
+            <span className="block font-serif text-stone-900 leading-relaxed text-lg bg-stone-50 p-2 rounded border border-stone-100">{value}</span>
+        </div>
     </div>
 );
 

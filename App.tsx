@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute } from './types';
+import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, CashBookEntry } from './types';
 import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
+import { dataStore } from './services/dataStore';
 import RoleSelector from './components/RoleSelector';
 import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
@@ -9,6 +10,7 @@ import ListingDetails from './components/ListingDetails';
 import AgreementsView from './components/AgreementsView';
 import DisputesView from './components/DisputesView';
 import CashBookView from './components/CashBookView';
+import LiveVoiceOverlay from './components/LiveVoiceOverlay';
 import Logo from './components/Logo';
 import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS } from './constants';
 
@@ -17,126 +19,191 @@ const App: React.FC = () => {
   const [role, setRole] = useState<UserRole>(UserRole.NONE);
   const [viewState, setViewState] = useState<ViewState>(ViewState.ONBOARDING);
   const [activeListing, setActiveListing] = useState<LandListing | null>(null);
+  const [isGlobalAdvisorChat, setIsGlobalAdvisorChat] = useState(false); 
   
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatSessions, setChatSessions] = useState<Record<string, ChatMessage[]>>({});
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([]);
   
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [isLiveCallActive, setIsLiveCallActive] = useState(false);
   
   // Data State with defaults
-  const [listings, setListings] = useState<LandListing[]>(MOCK_LISTINGS);
-  const [agreements, setAgreements] = useState<Agreement[]>(MOCK_AGREEMENTS);
-  const [disputes, setDisputes] = useState<Dispute[]>(MOCK_DISPUTES);
+  const [listings, setListings] = useState<LandListing[]>([]);
+  const [agreements, setAgreements] = useState<Agreement[]>([]);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [cashBookEntries, setCashBookEntries] = useState<CashBookEntry[]>([]); 
 
   // --- Persistence (Load) ---
   useEffect(() => {
-    try {
-        const savedRole = localStorage.getItem('konaki_role');
-        const savedListings = localStorage.getItem('konaki_listings');
-        const savedAgreements = localStorage.getItem('konaki_agreements');
-        const savedDisputes = localStorage.getItem('konaki_disputes');
-        const savedChatSessions = localStorage.getItem('konaki_chat_sessions');
-
+    const loadData = async () => {
+        // Load Role
+        const savedRole = dataStore.getRole();
         if (savedRole && savedRole !== 'NONE') {
-            setRole(savedRole as UserRole);
+            setRole(savedRole);
             setViewState(ViewState.DASHBOARD);
         }
-        if (savedListings) setListings(JSON.parse(savedListings));
-        if (savedAgreements) setAgreements(JSON.parse(savedAgreements));
-        if (savedDisputes) setDisputes(JSON.parse(savedDisputes));
+
+        // Load Tables (Try Supabase -> Fallback Local)
+        const l = await dataStore.getListings(MOCK_LISTINGS);
+        setListings(l);
+
+        const a = await dataStore.getAgreements(MOCK_AGREEMENTS);
+        setAgreements(a);
+
+        const d = await dataStore.getDisputes(MOCK_DISPUTES);
+        setDisputes(d);
+
+        // Load Cashbook
+        const c = await dataStore.getCashBook([]);
+        setCashBookEntries(c);
+
+        // Chat sessions still local
+        const savedChatSessions = localStorage.getItem('konaki_chat_sessions');
         if (savedChatSessions) setChatSessions(JSON.parse(savedChatSessions));
+    };
 
-    } catch (e) {
-        console.error("Failed to load state", e);
-    }
+    loadData();
   }, []);
-
-  // --- Persistence (Save) ---
-  useEffect(() => {
-    if (role !== UserRole.NONE) localStorage.setItem('konaki_role', role);
-    localStorage.setItem('konaki_listings', JSON.stringify(listings));
-    localStorage.setItem('konaki_agreements', JSON.stringify(agreements));
-    localStorage.setItem('konaki_disputes', JSON.stringify(disputes));
-    localStorage.setItem('konaki_chat_sessions', JSON.stringify(chatSessions));
-  }, [role, listings, agreements, disputes, chatSessions]);
 
   // --- Handlers ---
 
   const handleRoleSelect = (selectedRole: UserRole) => {
     setRole(selectedRole);
+    dataStore.setRole(selectedRole);
     setViewState(ViewState.DASHBOARD);
   };
 
   const handleListingSelect = (listing: LandListing) => {
     setActiveListing(listing);
+    setIsGlobalAdvisorChat(false);
     setViewState(ViewState.LISTING_DETAILS);
   };
 
   const handleStartChat = () => {
     if (!activeListing) return;
+    setIsGlobalAdvisorChat(false);
     const sessionMessages = chatSessions[activeListing.id] || [];
     setMessages(sessionMessages);
+    setCurrentSuggestions([]);
     setViewState(ViewState.CHAT);
   };
 
   const handleStartNegotiation = () => {
     if (!activeListing) return;
+    setIsGlobalAdvisorChat(false);
     setViewState(ViewState.CHAT);
     const sessionMessages = chatSessions[activeListing.id] || [];
     setMessages(sessionMessages);
-    const negotiationPrompt = "Ke kopa ho qala therisano ea tumellano ea khirisano. Re ka bua ka lintlha tsena: Nako (Duration), Tefo (Payment), le Tšebeliso (Land Use/Responsibilities)?";
+    setCurrentSuggestions([]);
+    
+    // Customize prompt based on category
+    const isEquipment = activeListing.category === 'EQUIPMENT';
+    const negotiationPrompt = isEquipment 
+        ? "Ke kopa ho qala therisano ea ho hira thepa. Re ka bua ka: Nako (Duration), Tefo (Rate), le Mafura (Fuel)?"
+        : "Ke kopa ho qala therisano ea tumellano ea khirisano. Re ka bua ka lintlha tsena: Nako (Duration), Tefo (Payment), le Tšebeliso (Land Use)?";
+        
     setTimeout(() => {
         handleSendMessage(negotiationPrompt);
     }, 100);
   };
 
+  // Open the Global Intelligent Matching Advisor
+  const handleOpenAdvisor = () => {
+      setIsGlobalAdvisorChat(true);
+      setActiveListing(null);
+      
+      const sessionKey = 'konaki_advisor_global';
+      const sessionMessages = chatSessions[sessionKey] || [];
+      setMessages(sessionMessages);
+      setCurrentSuggestions(["Ke batla mobu oa poone Leribe", "Ke hloka Terekere Maseru"]);
+      setViewState(ViewState.CHAT);
+      
+      if (sessionMessages.length === 0) {
+          // Initial greeting
+           setTimeout(() => {
+                const welcomeMsg: ChatMessage = {
+                    id: 'welcome',
+                    sender: 'konaki',
+                    text: "Lumela! Ke 'na Konaki Advisor. Nka u thusa ho fumana eng kajeno? (Hello! I can help you match with land or equipment.)",
+                    timestamp: Date.now()
+                };
+                setMessages([welcomeMsg]);
+                updateChatSession(sessionKey, [welcomeMsg]);
+           }, 500);
+      }
+  };
+
   const handleBackToDashboard = () => {
     setActiveListing(null);
+    setIsGlobalAdvisorChat(false);
     setViewState(ViewState.DASHBOARD);
   };
 
   const handleCloseChat = () => {
     setActiveListing(null);
+    setIsGlobalAdvisorChat(false);
     setViewState(ViewState.DASHBOARD);
   };
 
-  const handleAddListing = (newListing: LandListing) => {
-    setListings(prev => [newListing, ...prev]);
+  const handleAddListing = async (newListing: LandListing) => {
+    const updated = [newListing, ...listings];
+    setListings(updated);
+    await dataStore.saveListings(updated);
   };
 
-  const handleAddDispute = (newDispute: Dispute) => {
-    setDisputes(prev => [newDispute, ...prev]);
+  const handleAddDispute = async (newDispute: Dispute) => {
+    const updated = [newDispute, ...disputes];
+    setDisputes(updated);
+    await dataStore.saveDisputes(updated);
   };
 
-  const updateChatSession = (listingId: string, newMessages: ChatMessage[]) => {
+  const handleUpdateCashBook = async (updatedEntries: CashBookEntry[]) => {
+      setCashBookEntries(updatedEntries);
+      await dataStore.saveCashBook(updatedEntries);
+  }
+
+  const handleUpdateAgreement = async (updatedAgreement: Agreement) => {
+      const updated = agreements.map(a => a.id === updatedAgreement.id ? updatedAgreement : a);
+      setAgreements(updated);
+      await dataStore.saveAgreements(updated);
+  }
+
+  const updateChatSession = (id: string, newMessages: ChatMessage[]) => {
       setMessages(newMessages);
-      setChatSessions(prev => ({
-          ...prev,
-          [listingId]: newMessages
-      }));
+      const updatedSessions = { ...chatSessions, [id]: newMessages };
+      setChatSessions(updatedSessions);
+      localStorage.setItem('konaki_chat_sessions', JSON.stringify(updatedSessions));
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (!activeListing) return;
+  const handleSendMessage = async (text: string, attachment?: string) => {
+    const sessionId = isGlobalAdvisorChat ? 'konaki_advisor_global' : (activeListing?.id || '');
+    if (!sessionId) return;
+
+    setCurrentSuggestions([]);
 
     const newUserMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'user',
       text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      attachment,
+      attachmentType: attachment ? 'image' : undefined
     };
     
-    const currentSessionMsgs = chatSessions[activeListing.id] || [];
+    const currentSessionMsgs = chatSessions[sessionId] || [];
     const updatedHistory = [...currentSessionMsgs, newUserMsg];
     
-    updateChatSession(activeListing.id, updatedHistory);
+    updateChatSession(sessionId, updatedHistory);
     
     setIsAiLoading(true);
 
-    const counterparty = activeListing.holderName || "Motho";
-    const response = await sendMessageToGemini(updatedHistory, role, counterparty);
+    const counterparty = isGlobalAdvisorChat ? "Konaki Advisor" : (activeListing?.holderName || "Motho");
+    const contextListings = isGlobalAdvisorChat ? listings : [];
+
+    const response = await sendMessageToGemini(updatedHistory, role, counterparty, contextListings);
 
     setIsAiLoading(false);
 
@@ -145,7 +212,7 @@ const App: React.FC = () => {
     if (response.counterpartyReply) {
         newMessages.push({
             id: (Date.now() + 1).toString(),
-            sender: 'counterparty',
+            sender: isGlobalAdvisorChat ? 'konaki' : 'counterparty', 
             text: response.counterpartyReply,
             timestamp: Date.now()
         });
@@ -161,15 +228,27 @@ const App: React.FC = () => {
         });
         setShowAiPanel(true);
     }
+    
+    if (response.suggestedActions) {
+        setCurrentSuggestions(response.suggestedActions);
+    }
 
-    updateChatSession(activeListing.id, [...updatedHistory, ...newMessages]);
+    updateChatSession(sessionId, [...updatedHistory, ...newMessages]);
   };
 
   const handleFinalizeAgreement = async () => {
       if (!activeListing) return;
       setIsAiLoading(true);
-      const newAgreement = await generateAgreementSummary(messages, activeListing.holderName, activeListing.id);
-      setAgreements(prev => [newAgreement, ...prev]);
+      const newAgreement = await generateAgreementSummary(
+          messages, 
+          activeListing.holderName, 
+          activeListing.id,
+          activeListing.category
+      );
+      
+      const updated = [newAgreement, ...agreements];
+      setAgreements(updated);
+      await dataStore.saveAgreements(updated);
       setIsAiLoading(false);
       setViewState(ViewState.AGREEMENTS);
       alert("Tumellano e entsoe! (Agreement generated!)");
@@ -177,7 +256,11 @@ const App: React.FC = () => {
 
   const goBack = () => {
     if (viewState === ViewState.CHAT) {
-        setViewState(ViewState.LISTING_DETAILS);
+        if(isGlobalAdvisorChat) {
+            setViewState(ViewState.DASHBOARD);
+        } else {
+            setViewState(ViewState.LISTING_DETAILS);
+        }
     } else if (viewState === ViewState.LISTING_DETAILS) {
         setActiveListing(null);
         setViewState(ViewState.DASHBOARD);
@@ -188,13 +271,17 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (window.confirm("U batla ho tsoa? (Log out?)")) {
-        setRole(UserRole.NONE);
-        localStorage.removeItem('konaki_role');
-        setViewState(ViewState.ONBOARDING);
-        setActiveListing(null);
-        setChatSessions({});
-    }
+    // Add a small timeout to ensure the UI registers the tap before blocking with confirm
+    setTimeout(() => {
+        if (window.confirm("U batla ho tsoa? (Log out?)")) {
+            setRole(UserRole.NONE);
+            dataStore.setRole(UserRole.NONE);
+            setViewState(ViewState.ONBOARDING);
+            setActiveListing(null);
+            setChatSessions({});
+            localStorage.removeItem('konaki_chat_sessions');
+        }
+    }, 50);
   };
 
   const NavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
@@ -203,6 +290,7 @@ const App: React.FC = () => {
       <button 
         onClick={() => {
             setActiveListing(null);
+            setIsGlobalAdvisorChat(false);
             setViewState(targetView);
         }}
         className={`w-full text-left p-3 px-4 rounded-xl transition-all flex items-center gap-3 mb-1 no-print ${
@@ -222,6 +310,7 @@ const App: React.FC = () => {
         <button 
             onClick={() => {
                 setActiveListing(null);
+                setIsGlobalAdvisorChat(false);
                 setViewState(targetView);
             }}
             className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors no-print ${
@@ -247,6 +336,8 @@ const App: React.FC = () => {
         listings={listings}
         onSelectListing={handleListingSelect} 
         onAddListing={handleAddListing}
+        onOpenAdvisor={handleOpenAdvisor}
+        onStartLiveCall={() => setIsLiveCallActive(true)}
       />;
   } else if (viewState === ViewState.LISTING_DETAILS && activeListing) {
       MainContent = <ListingDetails 
@@ -256,20 +347,26 @@ const App: React.FC = () => {
         onBack={handleBackToDashboard}
       />;
   } else if (viewState === ViewState.AGREEMENTS) {
-      MainContent = <AgreementsView agreements={agreements} />;
+      MainContent = <AgreementsView agreements={agreements} onUpdateAgreement={handleUpdateAgreement} />;
   } else if (viewState === ViewState.DISPUTES) {
       MainContent = <DisputesView disputes={disputes} onAddDispute={handleAddDispute} />;
   } else if (viewState === ViewState.CASHBOOK) {
-      MainContent = <CashBookView />;
+      MainContent = <CashBookView initialEntries={cashBookEntries} onUpdate={handleUpdateCashBook} />;
   } else {
-      MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} />; 
+      MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} />; 
   }
 
-  const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT && activeListing !== null;
+  const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT;
   const isMobileChatActive = viewState === ViewState.CHAT;
+  
+  const chatName = isGlobalAdvisorChat ? "Konaki Advisor" : (activeListing?.holderName || 'Motho');
+  const chatRole = isGlobalAdvisorChat ? UserRole.NONE : role; 
 
   return (
     <div className="fixed inset-0 w-full h-full bg-stone-50 flex flex-col md:flex-row overflow-hidden font-sans">
+      
+      {/* Live Voice Overlay */}
+      {isLiveCallActive && <LiveVoiceOverlay onClose={() => setIsLiveCallActive(false)} />}
       
       <div className="hidden md:flex w-72 bg-green-900 text-white flex-col justify-between p-6 shadow-2xl z-30 shrink-0 no-print">
         <div>
@@ -312,13 +409,16 @@ const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col relative h-full overflow-hidden">
         
-        <div className="md:hidden bg-green-900 text-white px-4 h-16 shrink-0 z-20 flex items-center justify-between shadow-md no-print">
+        {/* Mobile Header: High Z-Index to stay above Maps/overlays */}
+        <div className="md:hidden bg-green-900 text-white px-4 h-16 shrink-0 z-[2000] flex items-center justify-between shadow-md no-print relative">
              {isMobileChatActive || viewState === ViewState.LISTING_DETAILS ? (
                  <>
                     <button onClick={goBack} className="p-2 -ml-2 text-2xl active:opacity-70 mr-2 rounded-full hover:bg-white/10">
                         ←
                     </button>
-                    {activeListing ? (
+                    {isGlobalAdvisorChat ? (
+                        <div className="font-bold">Konaki Advisor</div>
+                    ) : activeListing ? (
                         <div className="flex items-center flex-1 overflow-hidden">
                             <div className="flex-1 overflow-hidden">
                                 <h2 className="font-bold text-sm truncate leading-tight">{activeListing.holderName}</h2>
@@ -339,9 +439,15 @@ const App: React.FC = () => {
                         </div>
                         <span className="font-bold text-lg tracking-wide">KONAKI AI</span>
                     </div>
-                    <div className="w-8 h-8 bg-green-800 rounded-full flex items-center justify-center text-sm border border-green-700">
+                    {/* Logout Button */}
+                    <button 
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-10 h-10 bg-green-800 rounded-full flex items-center justify-center text-base border border-green-700 shadow-sm active:bg-green-700 transition-colors cursor-pointer hover:bg-green-700 z-50 pointer-events-auto"
+                        title="Tsoa (Log out)"
+                    >
                         {role === UserRole.FARMER ? '👨🏽‍🌾' : role === UserRole.PROVIDER ? '🚜' : '🏡'}
-                    </div>
+                    </button>
                  </>
              )}
         </div>
@@ -365,11 +471,12 @@ const App: React.FC = () => {
                     <ChatInterface 
                         messages={messages}
                         onSendMessage={handleSendMessage}
-                        onFinalizeAgreement={handleFinalizeAgreement}
+                        onFinalizeAgreement={!isGlobalAdvisorChat ? handleFinalizeAgreement : undefined}
                         onClose={handleCloseChat}
                         isLoading={isAiLoading}
-                        activeRole={role}
-                        counterpartyName={activeListing?.holderName || 'Motho'}
+                        activeRole={chatRole}
+                        counterpartyName={chatName}
+                        suggestions={currentSuggestions}
                     />
                 </div>
             )}
@@ -379,16 +486,11 @@ const App: React.FC = () => {
                     <span className="text-lg">🤖</span> Konaki Insights
                 </h3>
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hide">
-                    {messages.filter(m => m.sender === 'konaki').map(m => (
+                    {messages.filter(m => m.sender === 'konaki' && m.isIntervention).map(m => (
                         <div key={m.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-200 text-sm text-amber-900 leading-relaxed">
                             {m.text}
                         </div>
                     ))}
-                    {messages.filter(m => m.sender === 'konaki').length === 0 && (
-                        <div className="text-center text-amber-400 text-sm mt-10 px-4">
-                            Konaki e tla fana ka likeletso mona ha li hlokahala.
-                        </div>
-                    )}
                 </div>
             </div>
 

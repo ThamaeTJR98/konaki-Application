@@ -3,6 +3,7 @@
   "description": "A Sesotho-first digital assistant supporting agricultural partnerships in Lesotho, facilitating land negotiations and lease drafting.",
   "requestFramePermissions": [
     "microphone",
-    "geolocation"
+    "geolocation",
+    "camera"
   ]
 }

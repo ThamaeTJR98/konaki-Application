@@ -1,63 +1,113 @@
+
 import React from 'react';
 
 interface LogoProps {
   className?: string;
+  isThinking?: boolean;
+  isSpeaking?: boolean;
 }
 
-const Logo: React.FC<LogoProps> = ({ className = "w-full h-full" }) => {
+const Logo: React.FC<LogoProps> = ({ className = "w-full h-full", isThinking = false, isSpeaking = false }) => {
+  // Brand Colors from JSON
+  const COLORS = {
+    green: "#2E7D32",
+    brown: "#6D3F1F",
+    lightGreen: "#7CB342",
+    yellow: "#FDB813",
+    orange: "#F57C00",
+    tan: "#E0AC69"
+  };
+
   return (
     <svg 
       viewBox="0 0 200 200" 
       className={className} 
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Konaki Logo - Mokorotlo"
+      aria-label="Konaki Logo - Mokorotlo with Sunrise"
     >
-      {/* Background Circle - Earthy Tone */}
-      <circle cx="100" cy="100" r="95" fill="#f5f5f4" stroke="#78350f" strokeWidth="2" />
+      <style>
+        {`
+          @keyframes bounce-gentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+          }
+          @keyframes pulse-speak {
+            0% { transform: scale(0.95); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.9; }
+            100% { transform: scale(0.95); opacity: 1; }
+          }
+          @keyframes sun-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .animate-think .hat-group {
+            animation: bounce-gentle 1.2s infinite ease-in-out;
+          }
+          .animate-speak .hat-group {
+             animation: pulse-speak 0.8s infinite ease-in-out;
+          }
+          .animate-think .sun-rays {
+             animation: sun-spin 10s linear infinite;
+             transform-origin: 100px 100px;
+          }
+        `}
+      </style>
+
+      {/* Circle Background */}
+      <circle cx="100" cy="100" r="95" fill="#ffffff" stroke={COLORS.lightGreen} strokeWidth="1" />
       
-      {/* Stylized Mokorotlo (Basotho Hat) */}
-      <g transform="translate(100, 110) scale(0.9)">
-        {/* Hat Base */}
-        <path 
-            d="M-60 40 Q0 60 60 40 L50 20 Q0 40 -50 20 Z" 
-            fill="#d97706" 
-            stroke="#78350f" 
-            strokeWidth="3"
-        />
-        {/* Hat Cone (Woven Texture effect) */}
-        <path 
-            d="M-50 20 Q0 -100 50 20" 
-            fill="#fcd34d" 
-            stroke="#78350f" 
-            strokeWidth="3"
-        />
-        {/* Center line decoration */}
-        <path d="M0 -80 L0 20" stroke="#78350f" strokeWidth="2" strokeDasharray="5,5" />
-        
-        {/* Top Knot */}
-        <circle cx="0" cy="-85" r="8" fill="#78350f" />
-        
-        {/* Decorative Weave Lines */}
-        <path d="M-30 0 Q0 -20 30 0" fill="none" stroke="#b45309" strokeWidth="2" />
-        <path d="M-40 20 Q0 0 40 20" fill="none" stroke="#b45309" strokeWidth="2" />
+      {/* Sunrise (Background Element) */}
+      <g className={isThinking ? "sun-rays" : ""}>
+        <circle cx="100" cy="100" r="60" fill={COLORS.yellow} opacity="0.2" />
+        <path d="M100 20 L100 40 M180 100 L160 100 M100 180 L100 160 M20 100 L40 100" stroke={COLORS.orange} strokeWidth="2" opacity="0.3" strokeLinecap="round"/>
+        <path d="M156 44 L142 58 M156 156 L142 142 M44 156 L58 142 M44 44 L58 58" stroke={COLORS.orange} strokeWidth="2" opacity="0.3" strokeLinecap="round"/>
       </g>
 
-      {/* Wheat/Crops flanking the hat */}
-      <path 
-        d="M30 150 Q50 120 40 90 M30 150 Q10 120 20 90" 
-        stroke="#15803d" 
-        strokeWidth="4" 
-        strokeLinecap="round" 
-        fill="none"
-      />
-      <path 
-        d="M170 150 Q150 120 160 90 M170 150 Q190 120 180 90" 
-        stroke="#15803d" 
-        strokeWidth="4" 
-        strokeLinecap="round" 
-        fill="none"
-      />
+      {/* Main Content Group (Animated) */}
+      <g className={isThinking ? "animate-think" : isSpeaking ? "animate-speak" : ""}>
+          
+          <g className="hat-group" transform="translate(100, 110) scale(0.95)">
+            {/* Hat Base */}
+            <path 
+                d="M-65 40 Q0 65 65 40 L55 20 Q0 45 -55 20 Z" 
+                fill={COLORS.tan} 
+                stroke={COLORS.brown} 
+                strokeWidth="3"
+            />
+            {/* Hat Cone */}
+            <path 
+                d="M-55 20 Q0 -105 55 20" 
+                fill={COLORS.tan} 
+                stroke={COLORS.brown} 
+                strokeWidth="3"
+            />
+            
+            {/* Woven Patterns */}
+            <path d="M0 -85 L0 20" stroke={COLORS.brown} strokeWidth="1.5" strokeDasharray="4,3" />
+            <path d="M-35 0 Q0 -25 35 0" fill="none" stroke={COLORS.brown} strokeWidth="1.5" />
+            <path d="M-45 20 Q0 -5 45 20" fill="none" stroke={COLORS.brown} strokeWidth="1.5" />
+            
+            {/* Top Knot */}
+            <circle cx="0" cy="-90" r="6" fill={COLORS.brown} />
+          </g>
+
+          {/* Stylized Crops/Fields (Foreground) */}
+          <path 
+            d="M35 150 Q55 120 45 90 M35 150 Q15 120 25 90" 
+            stroke={COLORS.green} 
+            strokeWidth="4" 
+            strokeLinecap="round" 
+            fill="none"
+          />
+          <path 
+            d="M165 150 Q145 120 155 90 M165 150 Q185 120 175 90" 
+            stroke={COLORS.green} 
+            strokeWidth="4" 
+            strokeLinecap="round" 
+            fill="none"
+          />
+      </g>
     </svg>
   );
 };

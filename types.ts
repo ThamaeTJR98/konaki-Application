@@ -12,6 +12,8 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isIntervention?: boolean; // If true, this is Konaki stepping in
+  attachment?: string; // Base64 image string
+  attachmentType?: 'image';
 }
 
 // Generalized to support both Land and Equipment
@@ -44,6 +46,7 @@ export type LandListing = Listing;
 export interface Agreement {
   id: string;
   listingId: string;
+  listingCategory: 'LAND' | 'EQUIPMENT';
   parties: {
       tenant: string; // or Client
       landholder: string; // or Provider
@@ -52,12 +55,20 @@ export interface Agreement {
   dateCreated: string;
   title: string;
   clauses: {
-      duration: string;
-      paymentTerms: string;
-      landUse: string; // or UsageTerms
-      termination: string;
+      // Shared
+      duration: string; // Length of lease OR Dates of rental
+      paymentTerms: string; // Share split OR Daily Rate
+      termination: string; // Notice period OR Return policy
+      
+      // Land Specific
+      landUse?: string; 
+      
+      // Equipment Specific
+      fuelPolicy?: string; // Who buys diesel?
+      operatorIncluded?: string; // Is the driver included?
+      damageLiability?: string; // Who pays for breakage?
   };
-  // New: Digital Signatures
+  // Digital Signatures
   signatures?: {
       tenant?: string; // Base64 image data
       landholder?: string; // Base64 image data
@@ -96,6 +107,7 @@ export interface CashBookEntry {
 export interface GeminiResponse {
   counterpartyReply?: string;
   konakiGuidance?: string;
+  suggestedActions?: string[]; // Dynamic smart suggestions
 }
 
 export enum ViewState {
