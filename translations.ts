@@ -1,9 +1,9 @@
+
 import { TranslationDictionary } from "./types";
 
 export const translations: TranslationDictionary = {
     // Navigation
     "home": { st: "Lehae", en: "Home" },
-    "match": { st: "Smart Match", en: "Smart Match" },
     "messages": { st: "Melaetsa", en: "Messages" },
     "agreements": { st: "Litumellano", en: "Agreements" },
     "diary": { st: "Buka ea Temo", en: "Farming Diary" },

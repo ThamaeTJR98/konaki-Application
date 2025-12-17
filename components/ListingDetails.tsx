@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LandListing } from '../types';
 
@@ -199,7 +198,7 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onStartChat, o
         )}
 
         {/* Map Preview Placeholder */}
-        <div className="rounded-3xl overflow-hidden border border-stone-200 h-80 md:h-96 bg-stone-200 relative shadow-inner">
+        <div className="rounded-3xl overflow-hidden border border-stone-200 h-64 bg-stone-200 relative shadow-inner">
              <iframe 
                 width="100%" 
                 height="100%" 
@@ -207,19 +206,13 @@ const ListingDetails: React.FC<ListingDetailsProps> = ({ listing, onStartChat, o
                 scrolling="no" 
                 marginHeight={0} 
                 marginWidth={0} 
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${(listing.coordinates?.lng || 28.2)-0.05}%2C${(listing.coordinates?.lat || -29.6)-0.05}%2C${(listing.coordinates?.lng || 28.2)+0.05}%2C${(listing.coordinates?.lat || -29.6)+0.05}&amp;layer=mapnik&amp;marker=${listing.coordinates?.lat || -29.6}%2C${listing.coordinates?.lng || 28.2}`} 
-                className="w-full h-full opacity-100"
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${(listing.coordinates?.lng || 28.2)-0.1}%2C${(listing.coordinates?.lat || -29.6)-0.1}%2C${(listing.coordinates?.lng || 28.2)+0.1}%2C${(listing.coordinates?.lat || -29.6)+0.1}&amp;layer=mapnik&amp;marker=${listing.coordinates?.lat || -29.6}%2C${listing.coordinates?.lng || 28.2}`} 
+                className="w-full h-full opacity-80 hover:opacity-100 transition-opacity"
                 title="Mini Map"
             ></iframe>
-            
-            <a 
-                href={`https://www.openstreetmap.org/?mlat=${listing.coordinates?.lat}&mlon=${listing.coordinates?.lng}#map=15/${listing.coordinates?.lat}/${listing.coordinates?.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute top-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-xl text-xs font-bold shadow-sm border border-stone-200 flex items-center gap-2 hover:bg-white transition-colors text-stone-800"
-            >
-                <span>🗺️</span> View Larger Map
-            </a>
+            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm border border-stone-200">
+                🗺️ Location View
+            </div>
         </div>
 
       </div>

@@ -14,10 +14,6 @@ export interface ChatMessage {
   isIntervention?: boolean; // If true, this is Konaki stepping in
   attachment?: string; // Base64 image string
   attachmentType?: 'image';
-  
-  // Translation Support
-  isTranslated?: boolean;
-  originalText?: string;
 }
 
 // Generalized to support both Land and Equipment
@@ -147,7 +143,6 @@ export enum ViewState {
   CHAT,
   AGREEMENTS,
   DISPUTES,
-  MATCHING,
   MESSAGES,
   DIARY
 }

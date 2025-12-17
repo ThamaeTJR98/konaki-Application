@@ -1,25 +1,15 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { KONAKI_SYSTEM_INSTRUCTION } from "../constants";
-import { ChatMessage, GeminiResponse, Agreement, Listing, FarmerProfile, MatchInsight, CashBookEntry, DiaryEntry } from "../types";
+import { ChatMessage, GeminiResponse, Agreement, Listing, FarmerProfile, MatchInsight, CashBookEntry } from "../types";
 
 // Initialize Gemini Client Lazily to avoid top-level crashes if env vars are missing during load
 let aiInstance: GoogleGenAI | null = null;
 
 const getApiKey = (): string => {
-    let key = "";
-    try {
-        if (typeof process !== 'undefined' && process.env?.API_KEY) {
-            key = process.env.API_KEY;
-        }
-    } catch (e) {}
-
-    if (!key) {
-        try {
-            key = (import.meta as any)?.env?.VITE_API_KEY || "";
-        } catch (e) {}
-    }
-
+    // Priority: process.env (Node/Sandbox) -> import.meta.env (Vite/Vercel)
+    // We cast import.meta to any to avoid TS errors in environments where types aren't fully set up
+    const key = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
     if (!key) {
         console.warn("KONAKI: Missing API Key. Please set VITE_API_KEY in your environment variables.");
     }
@@ -351,7 +341,7 @@ export const generateListingFromImage = async (base64Image: string, category: 'L
         const ai = getAiClient();
         const prompt = category === 'LAND' 
             ? "Analyze this agricultural land in Lesotho. Identify soil type (e.g. Selokoe, Lehlabathe), terrain (flat/sloped), and potential crops. Write a persuasive description in Sesotho sa Lesotho for a listing."
-            : "Analyze this agricultural equipment. Identify the type (Tractor, Plough, etc), make/model if visible, and condition. Write a persuasive description in Sesotho sa Lesotho for a listing.";
+            : "Analyze this agricultural equipment. Identify the type (Tractor, Plough, etc), make/model if visible, and condition. Write a persuasive description in Sesotho sa Lesotho for a rental listing.";
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -389,54 +379,19 @@ export const generateListingFromImage = async (base64Image: string, category: 'L
     }
 }
 
-// --- Dispute Advice Generation (Enhanced) ---
+// --- Dispute Advice Generation ---
 
-export const generateDisputeAdvice = async (
-    type: string, 
-    description: string, 
-    context?: { agreement?: Agreement, history?: DiaryEntry[] }
-): Promise<string> => {
+export const generateDisputeAdvice = async (type: string, description: string): Promise<string> => {
     try {
         const ai = getAiClient();
-        
-        let contextData = "";
-        if (context?.agreement) {
-            contextData += `
-            CONTEXT - EXISTING AGREEMENT:
-            Title: ${context.agreement.title}
-            Status: ${context.agreement.status}
-            Terms: ${JSON.stringify(context.agreement.clauses)}
-            `;
-        }
-        
-        if (context?.history && context.history.length > 0) {
-            contextData += `
-            CONTEXT - PARTNERSHIP WORKSPACE HISTORY (DIARY EVIDENCE):
-            ${context.history.map(e => `- ${e.date} [${e.type}]: ${e.title} (${e.description})`).join('\n')}
-            `;
-        } else {
-             contextData += `
-            CONTEXT - PARTNERSHIP HISTORY: No diary records linked.
-            `;
-        }
-
         const prompt = `
-            Act as a Legal Mediator and Agricultural Extension Officer for Lesotho.
-            Provide detailed, objective advice for the following dispute.
+            Provide brief, preliminary advice (in Sesotho) strictly for an agricultural partnership or land dispute (e.g., boundaries, crop damage, lease terms) in Lesotho.
+            Dispute Type: ${type}
+            Description: ${description}
             
-            DISPUTE DETAILS:
-            Type: ${type}
-            Complaint: ${description}
-            
-            ${contextData}
-            
-            INSTRUCTIONS:
-            1. Analyze the complaint against the Agreement Terms (if provided) and the Diary History (evidence).
-            2. If the Diary supports one side (e.g., payments were made), mention it clearly.
-            3. If the Agreement is silent on the issue, reference the Land Act 2010.
-            4. Provide a step-by-step resolution path.
-            5. Keep response in Sesotho sa Lesotho, but you can include English legal terms in brackets.
-            6. Max 120 words.
+            If this is NOT about agriculture/land, politely decline to advise.
+            Reference the Land Act 2010 or role of the Chief (Morena) where applicable.
+            Keep it under 50 words.
         `;
         
         const response = await ai.models.generateContent({
@@ -453,7 +408,7 @@ export const generateDisputeAdvice = async (
     }
 }
 
-// --- Voice & Translation Features ---
+// --- Voice Features ---
 
 export const transcribeAudio = async (audioBase64: string, mimeType: string): Promise<string> => {
   try {
@@ -493,29 +448,6 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
   } catch (error) {
     console.error("TTS Error:", error);
     return null;
-  }
-};
-
-export const translateText = async (text: string, targetLanguage: 'st' | 'en'): Promise<string> => {
-  if (!text) return "";
-  try {
-    const ai = getAiClient();
-    const languageName = targetLanguage === 'st' ? 'Sesotho sa Lesotho' : 'English';
-    const prompt = `Translate the following text to ${languageName}. Output ONLY the translated text, with no extra formatting or explanation.\n\nText: "${text}"`;
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "You are a highly accurate translation engine between English and Sesotho sa Lesotho. Preserve agricultural terminology.",
-        temperature: 0.1
-      }
-    });
-
-    return response.text?.trim() || text;
-  } catch (error) {
-    console.error("Translation Error:", error);
-    return text;
   }
 };
 

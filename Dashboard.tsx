@@ -1,12 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UserRole, Listing, FarmerProfile, Language, ViewState } from '../types';
+import { UserRole, Listing, Language } from '../types';
 import { DISTRICTS } from '../constants';
 import { translations } from '../translations';
 import LandCard from './LandCard';
 import MapComponent from './MapComponent';
 import { generateListingFromImage } from '../services/geminiService';
-import Logo from './Logo';
 
 interface DashboardProps {
   role: UserRole;
@@ -17,7 +16,6 @@ interface DashboardProps {
   onDeleteListing: (listingId: string) => void;
   onOpenAdvisor?: () => void;
   onStartLiveCall?: () => void;
-  onStartMatching?: (profile: FarmerProfile) => void;
   onOpenDisputes?: () => void;
   language: Language;
 }
@@ -33,11 +31,10 @@ const FabButton = ({ label, icon, onClick }: { label: string, icon: string, onCl
     </button>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onUpdateListing, onDeleteListing, onOpenAdvisor, onStartLiveCall, onStartMatching, onOpenDisputes, language }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onUpdateListing, onDeleteListing, onOpenAdvisor, onStartLiveCall, onOpenDisputes, language }) => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Bohle');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMyListingsOnly, setShowMyListingsOnly] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [isFabMenuOpen, setIsFabMenuOpen] = useState(false);
@@ -58,11 +55,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
         contentEl?.removeEventListener('scroll', handleScroll);
     };
   }, [isFabMenuOpen]);
-
-  // Profile State
-  const [profileCrops, setProfileCrops] = useState('');
-  const [profileBudget, setProfileBudget] = useState('');
-  const [profileDistrict, setProfileDistrict] = useState(DISTRICTS[0]);
 
   const [isLocating, setIsLocating] = useState(false);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
@@ -114,12 +106,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
 
   // Filter Logic Updated
   const filteredListings = listings.filter(l => {
-      // 1. Filter by ownership if toggle is on
       if (showMyListingsOnly) {
-          // This is a simple check based on name. A real app would use a user ID.
           return l.holderName.toLowerCase().includes("uena");
       }
-      // 2. Filter by District
       const matchDistrict = selectedDistrict === 'Bohle' || l.district === selectedDistrict;
       return matchDistrict;
   });
@@ -201,24 +190,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
     const canAddListing = role === UserRole.LANDHOLDER || role === UserRole.PROVIDER;
     if (canAddListing) setShowMyListingsOnly(true);
   };
-  
-  const handleStartProfile = () => {
-      setShowProfileModal(true);
-  }
-  
-  const handleSubmitProfile = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!onStartMatching) return;
-      
-      const profile: FarmerProfile = {
-          crops: profileCrops,
-          budget: profileBudget,
-          preferredDistricts: [profileDistrict]
-      };
-      
-      setShowProfileModal(false);
-      onStartMatching(profile);
-  }
 
   const handleOpenAddModal = () => {
     setEditingListing(null);
@@ -337,9 +308,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
       <div className="absolute bottom-6 right-6 z-20">
         {isFabMenuOpen && (
           <div className="flex flex-col items-end gap-4 mb-4">
-            {role === UserRole.FARMER && (
-              <FabButton label="AI Match" icon="🔥" onClick={handleStartProfile} />
-            )}
             {canAddListing && (
               <FabButton label="Add New" icon="➕" onClick={handleOpenAddModal} />
             )}
@@ -361,7 +329,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={handleCloseModal}>
           <form onSubmit={handleSubmitListing} className="bg-white rounded-xl w-full max-w-lg shadow-xl animate-fade-in-up p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold">{editingListing ? "Edit Listing" : "Add New Listing"}</h2>
-            {/* Form content here */}
             { role === UserRole.PROVIDER ? (
                 <div><label>Equipment Type</label><input value={newEquipmentType} onChange={e => setNewEquipmentType(e.target.value)} className="w-full border p-2 rounded" /></div>
             ) : (
@@ -373,31 +340,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
             <div><label>District</label><select value={newDistrict} onChange={e => setNewDistrict(e.target.value)} className="w-full border p-2 rounded">{DISTRICTS.map(d=><option key={d}>{d}</option>)}</select></div>
             <div><label>Price / Terms</label><input value={newPrice} onChange={e => setNewPrice(e.target.value)} className="w-full border p-2 rounded" /></div>
             <div><label>Description</label><textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} className="w-full border p-2 rounded" /></div>
-            {/* ... other inputs like features, image upload etc. */}
             <div className="flex justify-end gap-3 pt-4 border-t">
               <button type="button" onClick={handleCloseModal} className="px-4 py-2 bg-stone-100 rounded-lg">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg">Save</button>
             </div>
           </form>
-        </div>
-      )}
-
-       {/* Profile Modal for Matching */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowProfileModal(false)}>
-            <form onSubmit={handleSubmitProfile} className="bg-white rounded-xl w-full max-w-md shadow-xl p-6" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold">Find Your Match</h2>
-                <p className="text-sm text-stone-500 mb-4">Tell us what you need.</p>
-                <div className="space-y-4">
-                  <div><label>Crops you want to plant</label><input value={profileCrops} onChange={e => setProfileCrops(e.target.value)} className="w-full border p-2 rounded" placeholder="e.g. Poone, Linaoa" /></div>
-                  <div><label>Your budget/capacity</label><input value={profileBudget} onChange={e => setProfileBudget(e.target.value)} className="w-full border p-2 rounded" placeholder="e.g. M5000" /></div>
-                  <div><label>Preferred District</label><select value={profileDistrict} onChange={e => setProfileDistrict(e.target.value)} className="w-full border p-2 rounded">{DISTRICTS.map(d=><option key={d}>{d}</option>)}</select></div>
-                </div>
-                 <div className="flex justify-end gap-3 pt-4 mt-4 border-t">
-                    <button type="button" onClick={() => setShowProfileModal(false)} className="px-4 py-2 bg-stone-100 rounded-lg">Cancel</button>
-                    <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg">Find Matches</button>
-                </div>
-            </form>
         </div>
       )}
     </div>
