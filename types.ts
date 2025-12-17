@@ -1,5 +1,6 @@
 
 
+
 export enum UserRole {
   FARMER = 'SEHOAI',
   LANDHOLDER = 'MONGA_MOBU',
@@ -109,7 +110,7 @@ export interface DiaryEntry {
   photoUrl?: string; // Base64 image
 }
 
-// FIX: Add missing CashBookEntry type to resolve errors.
+// FIX: Add CashBookEntry interface
 export interface CashBookEntry {
   id: string;
   date: string;

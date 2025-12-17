@@ -1,8 +1,9 @@
 
 
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { KONAKI_SYSTEM_INSTRUCTION } from "../constants";
-// FIX: Import CashBookEntry to be used in the new analyzeCashBook function.
+// FIX: Import CashBookEntry
 import { ChatMessage, GeminiResponse, Agreement, Listing, FarmerProfile, MatchInsight, CashBookEntry } from "../types";
 
 // Initialize Gemini Client Lazily to avoid top-level crashes if env vars are missing during load
@@ -405,45 +406,6 @@ export const generateDisputeAdvice = async (type: string, description: string): 
     }
 }
 
-// FIX: Add missing analyzeCashBook function to resolve error in CashBookView.
-// --- Cash Book Analysis ---
-export const analyzeCashBook = async (entries: CashBookEntry[]): Promise<string> => {
-    try {
-        const ai = getAiClient();
-        
-        // Simplify entries to save tokens
-        const summary = entries.map(e => `${e.date}: ${e.type === 'INCOME' ? '+' : '-'}M${e.amount} (${e.description})`).join('\n');
-
-        const prompt = `
-            You are a financial advisor for a small-scale farmer in Lesotho.
-            Analyze the following cash book entries.
-            
-            Entries:
-            ${summary}
-
-            Task:
-            Provide a short, encouraging, and actionable piece of advice in Sesotho sa Lesotho.
-            Focus on one key area for improvement (e.g., high expenses on fuel, low sales, etc.).
-            Keep the response under 50 words.
-            Example: "Ke hlokometse hore litšenyehelo tsa diesel li phahame. Leka ho kopanya mesebetsi ho boloka mafura."
-        `;
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                systemInstruction: KONAKI_SYSTEM_INSTRUCTION,
-            }
-        });
-        
-        return response.text || "Ha ke khone ho fana ka keletso hajoale. Leka hape hamorao.";
-    } catch (e) {
-        console.error("CashBook Analysis Error", e);
-        return "Tšoarelo, ho bile le phoso ha ke ntse ke hlahloba buka ea hau. Re ka leka hape?";
-    }
-};
-
-
 // --- Voice Features ---
 
 export const transcribeAudio = async (audioBase64: string, mimeType: string): Promise<string> => {
@@ -470,7 +432,8 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
     const ai = getAiClient();
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: { parts: [{ text }] },
+// FIX: The 'contents' payload for TTS must be an array of content objects.
+        contents: [{ parts: [{ text }] }],
         config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -485,4 +448,30 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
     console.error("TTS Error:", error);
     return null;
   }
+};
+
+// --- Cash Book Analysis ---
+export const analyzeCashBook = async (entries: CashBookEntry[]): Promise<string> => {
+    try {
+        const ai = getAiClient();
+        const prompt = `
+            Act as a farm financial advisor in Lesotho. Analyze the following cash book entries.
+            - Total Income: M${entries.filter(e => e.type === 'INCOME').reduce((s, e) => s + e.amount, 0)}
+            - Total Expenses: M${entries.filter(e => e.type === 'EXPENSE').reduce((s, e) => s + e.amount, 0)}
+            
+            Entries: ${JSON.stringify(entries.slice(0, 20))}
+            
+            Task: Provide one short, actionable piece of advice in Sesotho. Focus on the biggest expense, the main source of income, or profitability. Keep it under 40 words.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        
+        return response.text || "Tlhahlobo ha e ea fumaneha hajoale. Lekola lipalo tsa hau.";
+    } catch (e) {
+        console.error("Cash Book analysis error", e);
+        return "Tšoarelo, re sitiloe ho etsa tlhahlobo hajoale.";
+    }
 };

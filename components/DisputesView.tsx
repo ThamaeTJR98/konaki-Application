@@ -10,12 +10,17 @@ interface DisputesViewProps {
 
 const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) => {
   const [showModal, setShowModal] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(disputes.length > 0 ? disputes[0].id : null);
   
   // Form State
   const [type, setType] = useState<DisputeType>(DisputeType.DAMAGE);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [isGettingAdvice, setIsGettingAdvice] = useState(false);
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(currentId => (currentId === id ? null : id));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +41,9 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
     onAddDispute(newDispute);
     setIsGettingAdvice(false);
     setShowModal(false);
+    
+    // Expand the new dispute
+    setExpandedId(newDispute.id);
     
     setTitle('');
     setDesc('');
@@ -121,11 +129,18 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
 
       <div className="space-y-4 max-w-4xl mx-auto">
         {disputes.length > 0 ? (
-          disputes.map(dispute => (
-            <div key={dispute.id} className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm border-l-4 border-l-red-500 animate-fade-in group hover:shadow-md transition-all">
-                <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-3">
-                         <span className="bg-red-50 text-red-600 p-2 rounded-lg text-xl">
+          disputes.map(dispute => {
+            const isExpanded = expandedId === dispute.id;
+
+            return (
+              <div key={dispute.id} className="bg-white rounded-xl border border-stone-200 shadow-sm animate-fade-in group hover:shadow-md transition-all duration-300 overflow-hidden">
+                {/* Clickable Header */}
+                <div 
+                    className="p-4 sm:p-6 cursor-pointer hover:bg-stone-50/50 transition-colors flex justify-between items-start gap-4"
+                    onClick={() => toggleExpand(dispute.id)}
+                >
+                    <div className="flex items-start gap-4">
+                         <span className="mt-1 bg-red-50 text-red-600 p-3 rounded-lg text-2xl border border-red-100">
                             {dispute.type === DisputeType.DAMAGE ? '🐄' : 
                              dispute.type === DisputeType.BOUNDARY ? '🚧' : 
                              dispute.type === DisputeType.INHERITANCE ? '📜' : '⚠️'}
@@ -135,36 +150,49 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
                             <p className="text-xs text-stone-500 font-medium">{dispute.type} • {dispute.dateReported}</p>
                          </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${dispute.status === 'Open' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {dispute.status}
-                    </span>
+                    <div className="flex items-center gap-4 pt-1">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase hidden sm:block ${dispute.status === 'Open' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                            {dispute.status}
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`w-6 h-6 text-stone-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
                 </div>
-                
-                <p className="text-stone-700 mb-4 pl-14 leading-relaxed">{dispute.description}</p>
-                
-                {dispute.aiAdvice && (
-                    <div className="ml-14 bg-amber-50 border border-amber-200 p-4 rounded-lg flex gap-3">
-                        <div className="text-2xl">⚖️</div>
-                        <div>
-                            <h4 className="font-bold text-amber-900 text-sm uppercase mb-1">Keletso ea Konaki (Legal Context)</h4>
-                            <p className="text-amber-800 text-sm italic">{dispute.aiAdvice}</p>
+
+                {/* Collapsible Content */}
+                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[1000px]' : 'max-h-0'}`}>
+                    <div className="px-6 pb-6 pt-2">
+                        <div className="pl-16">
+                            <p className="text-stone-700 mb-4 leading-relaxed">{dispute.description}</p>
+                            
+                            {dispute.aiAdvice && (
+                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex gap-3">
+                                    <div className="text-2xl mt-1">⚖️</div>
+                                    <div>
+                                        <h4 className="font-bold text-amber-900 text-sm uppercase mb-1">Keletso ea Konaki (Legal Context)</h4>
+                                        <p className="text-amber-800 text-sm italic">{dispute.aiAdvice}</p>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div className="mt-4 pt-4 border-t border-stone-100 flex justify-end gap-3">
+                                <button className="text-stone-500 text-sm hover:text-stone-800 font-medium">Koala (Resolve)</button>
+                                <button 
+                                    onClick={() => handlePrintReport(dispute)}
+                                    className="bg-stone-100 text-stone-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-stone-200 flex items-center gap-2"
+                                >
+                                    🖨️ Hlahisa Tlaleho ea Morena
+                                </button>
+                            </div>
                         </div>
                     </div>
-                )}
-                
-                <div className="mt-4 pt-4 border-t border-stone-100 flex justify-end gap-3 pl-14">
-                    <button className="text-stone-500 text-sm hover:text-stone-800 font-medium">Koala (Resolve)</button>
-                    <button 
-                        onClick={() => handlePrintReport(dispute)}
-                        className="bg-stone-100 text-stone-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-stone-200 flex items-center gap-2"
-                    >
-                        🖨️ Hlahisa Tlaleho ea Morena
-                    </button>
                 </div>
-            </div>
-          ))
+              </div>
+            )
+          })
         ) : (
-            <div className="text-center py-24 text-stone-400">
+          <div className="text-center py-24 text-stone-400">
                 <div className="text-5xl mb-4 grayscale opacity-30">☮️</div>
                 <p className="text-lg">Ha ho likhohlano tse tlalehiloeng.</p>
                 <p className="text-sm">Khotso e 'ne e atle.</p>

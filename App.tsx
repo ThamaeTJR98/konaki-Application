@@ -224,6 +224,21 @@ const App: React.FC = () => {
     const updated = [newListing, ...listings];
     setListings(updated);
     await dataStore.saveListings(updated);
+    setToastMessage("Listing added successfully!");
+  };
+
+  const handleUpdateListing = async (updatedListing: LandListing) => {
+    const updated = listings.map(l => l.id === updatedListing.id ? updatedListing : l);
+    setListings(updated);
+    await dataStore.saveListings(updated);
+    setToastMessage("Listing updated successfully!");
+  };
+
+  const handleDeleteListing = async (listingId: string) => {
+    const updated = listings.filter(l => l.id !== listingId);
+    setListings(updated);
+    await dataStore.saveListings(updated);
+    setToastMessage("Listing deleted.");
   };
 
   const handleAddDispute = async (newDispute: Dispute) => {
@@ -422,7 +437,18 @@ const App: React.FC = () => {
   let MainContent;
   switch (viewState) {
       case ViewState.DASHBOARD:
-          MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} language={language} />;
+          MainContent = <Dashboard 
+              role={role} 
+              listings={listings} 
+              onSelectListing={handleListingSelect} 
+              onAddListing={handleAddListing} 
+              onUpdateListing={handleUpdateListing}
+              onDeleteListing={handleDeleteListing}
+              onOpenAdvisor={handleOpenAdvisor} 
+              onStartLiveCall={() => setIsLiveCallActive(true)} 
+              onStartMatching={handleStartMatching} 
+              language={language} 
+          />;
           break;
       case ViewState.LISTING_DETAILS:
           if (activeListing) MainContent = <ListingDetails listing={activeListing} onStartChat={handleStartChat} onStartNegotiation={handleStartNegotiation} onBack={handleBackToDashboard} />;
@@ -440,7 +466,18 @@ const App: React.FC = () => {
           MainContent = <DiaryView entries={diaryEntries} onAddEntry={handleAddDiaryEntry} />;
           break;
       default:
-          MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} language={language} />;
+          MainContent = <Dashboard 
+              role={role} 
+              listings={listings} 
+              onSelectListing={handleListingSelect} 
+              onAddListing={handleAddListing} 
+              onUpdateListing={handleUpdateListing}
+              onDeleteListing={handleDeleteListing}
+              onOpenAdvisor={handleOpenAdvisor} 
+              onStartLiveCall={() => setIsLiveCallActive(true)} 
+              onStartMatching={handleStartMatching} 
+              language={language} 
+          />;
   }
 
   const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT;

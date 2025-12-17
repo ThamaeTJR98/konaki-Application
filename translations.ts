@@ -1,4 +1,3 @@
-
 import { TranslationDictionary } from "./types";
 
 export const translations: TranslationDictionary = {
@@ -7,7 +6,6 @@ export const translations: TranslationDictionary = {
     "match": { st: "Smart Match", en: "Smart Match" },
     "messages": { st: "Melaetsa", en: "Messages" },
     "agreements": { st: "Litumellano", en: "Agreements" },
-    "cashbook": { st: "Buka", en: "Cash Book" },
     "diary": { st: "Buka ea Temo", en: "Farming Diary" },
     "disputes": { st: "Likhohlano", en: "Disputes" },
     "logout": { st: "Tsoa", en: "Log Out" },
