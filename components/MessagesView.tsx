@@ -28,7 +28,6 @@ const MessagesView: React.FC<MessagesViewProps> = ({ chatSessions, listings, onO
         lastMessage,
         title: isAdvisor ? t('advisor_name') : (listing?.holderName || 'Unknown'),
         subtitle: isAdvisor ? 'AI Assistant' : (listing?.type || 'Listing'),
-        image: isAdvisor ? null : listing?.imageUrl,
         timestamp: lastMessage?.timestamp || 0
       };
     })
@@ -48,11 +47,13 @@ const MessagesView: React.FC<MessagesViewProps> = ({ chatSessions, listings, onO
               onClick={() => onOpenChat(session.key)}
               className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all cursor-pointer flex gap-4 items-center animate-fade-in"
             >
-              <div className="w-14 h-14 rounded-full bg-stone-100 flex-shrink-0 overflow-hidden border border-stone-100 flex items-center justify-center">
-                {session.image ? (
-                  <img src={session.image} alt="" className="w-full h-full object-cover" />
-                ) : (
+              <div className="w-14 h-14 rounded-full bg-stone-100 text-stone-300 flex-shrink-0 overflow-hidden border-2 border-white ring-2 ring-stone-200 flex items-center justify-center p-2">
+                {session.key === 'konaki_advisor_global' ? (
                   <div className="w-8 h-8 text-green-900"><Logo /></div>
+                ) : (
+                  <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
                 )}
               </div>
               

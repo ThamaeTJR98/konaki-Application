@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, FarmerProfile, Language, DiaryEntry } from './types';
-import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
+import { sendMessageToGemini, generateAgreementSummary, translateText } from './services/geminiService';
 import { dataStore } from './services/dataStore';
 import { isOnline } from './services/supabaseClient';
 import { translations } from './translations';
@@ -16,7 +16,7 @@ import MessagesView from './components/MessagesView';
 import DiaryView from './components/DiaryView';
 import LiveVoiceOverlay from './components/LiveVoiceOverlay';
 import Logo from './components/Logo';
-import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS } from './constants';
+import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS, MOCK_CHAT_SESSIONS, MOCK_DIARY_ENTRIES } from './constants';
 
 const App: React.FC = () => {
   // --- State Management ---
@@ -77,15 +77,19 @@ const App: React.FC = () => {
             setFarmerProfile(savedProfile);
         }
 
-        // Load Tables (Try Supabase -> Fallback Local)
+        // Load Tables (Try Supabase -> Fallback Local with Mocks)
         setListings(await dataStore.getListings(MOCK_LISTINGS));
         setAgreements(await dataStore.getAgreements(MOCK_AGREEMENTS));
         setDisputes(await dataStore.getDisputes(MOCK_DISPUTES));
-        setDiaryEntries(await dataStore.getDiary([]));
+        setDiaryEntries(await dataStore.getDiary(MOCK_DIARY_ENTRIES));
 
-        // Chat sessions still local
+        // Load Chat sessions with Mock fallback
         const savedChatSessions = localStorage.getItem('konaki_chat_sessions');
-        if (savedChatSessions) setChatSessions(JSON.parse(savedChatSessions));
+        if (savedChatSessions) {
+            setChatSessions(JSON.parse(savedChatSessions));
+        } else {
+            setChatSessions(MOCK_CHAT_SESSIONS);
+        }
     };
 
     loadData();
@@ -117,7 +121,21 @@ const App: React.FC = () => {
   const handleStartChat = () => {
     if (!activeListing) return;
     setIsGlobalAdvisorChat(false);
-    const sessionMessages = chatSessions[activeListing.id] || [];
+    const sessionKey = activeListing.id;
+    let sessionMessages = chatSessions[sessionKey] || [];
+    
+    // Add disclaimer only if it's a completely new chat session
+    if (sessionMessages.length === 0) {
+        const disclaimer: ChatMessage = {
+            id: `disclaimer_${Date.now()}`,
+            sender: 'konaki',
+            text: `Kea leboha! Please note: For this negotiation, I will be roleplaying as '${activeListing.holderName}' to help guide the conversation. My advice will appear separately.`,
+            timestamp: Date.now(),
+            isIntervention: true
+        };
+        sessionMessages = [disclaimer];
+    }
+    
     setMessages(sessionMessages);
     setCurrentSuggestions([]);
     setViewState(ViewState.CHAT);
@@ -142,10 +160,23 @@ const App: React.FC = () => {
   const handleStartNegotiation = () => {
     if (!activeListing) return;
     setIsGlobalAdvisorChat(false);
-    setViewState(ViewState.CHAT);
-    const sessionMessages = chatSessions[activeListing.id] || [];
+    const sessionKey = activeListing.id;
+    let sessionMessages = chatSessions[sessionKey] || [];
+    
+    if (sessionMessages.length === 0) {
+        const disclaimer: ChatMessage = {
+            id: `disclaimer_${Date.now()}`,
+            sender: 'konaki',
+            text: `Kea leboha! Please note: For this negotiation, I will be roleplaying as '${activeListing.holderName}' to help guide the conversation. My advice will appear separately.`,
+            timestamp: Date.now(),
+            isIntervention: true
+        };
+        sessionMessages = [disclaimer];
+    }
+
     setMessages(sessionMessages);
     setCurrentSuggestions([]);
+    setViewState(ViewState.CHAT);
     
     // Customize prompt based on category
     const isEquipment = activeListing.category === 'EQUIPMENT';
@@ -339,6 +370,43 @@ const App: React.FC = () => {
     updateChatSession(sessionId, [...updatedHistory, ...newMessages]);
   };
 
+  const handleTranslateMessage = async (sessionId: string, messageId: string) => {
+      const sessionMsgs = chatSessions[sessionId];
+      if (!sessionMsgs) return;
+
+      const msgIndex = sessionMsgs.findIndex(m => m.id === messageId);
+      if (msgIndex === -1) return;
+      
+      const msg = sessionMsgs[msgIndex];
+      const newMsgs = [...sessionMsgs];
+
+      if (msg.isTranslated && msg.originalText) {
+          // Revert to original
+          newMsgs[msgIndex] = { 
+              ...msg, 
+              text: msg.originalText, 
+              isTranslated: false, 
+              originalText: undefined 
+          };
+      } else {
+          // Translate
+          // If app language is English, translate to English. If Sesotho, translate to Sesotho.
+          // This allows users to understand incoming text in their preferred language.
+          setIsAiLoading(true);
+          const translated = await translateText(msg.text, language);
+          setIsAiLoading(false);
+          
+          newMsgs[msgIndex] = { 
+              ...msg, 
+              text: translated, 
+              originalText: msg.text, 
+              isTranslated: true 
+          };
+      }
+      
+      updateChatSession(sessionId, newMsgs);
+  };
+
   const handleFinalizeAgreement = async () => {
       if (!activeListing) return;
       setIsAiLoading(true);
@@ -446,7 +514,8 @@ const App: React.FC = () => {
               onDeleteListing={handleDeleteListing}
               onOpenAdvisor={handleOpenAdvisor} 
               onStartLiveCall={() => setIsLiveCallActive(true)} 
-              onStartMatching={handleStartMatching} 
+              onStartMatching={handleStartMatching}
+              onOpenDisputes={() => setViewState(ViewState.DISPUTES)} 
               language={language} 
           />;
           break;
@@ -457,13 +526,18 @@ const App: React.FC = () => {
           MainContent = <AgreementsView agreements={agreements} onUpdateAgreement={handleUpdateAgreement} />;
           break;
       case ViewState.DISPUTES:
-          MainContent = <DisputesView disputes={disputes} onAddDispute={handleAddDispute} />;
+          MainContent = <DisputesView 
+            disputes={disputes} 
+            onAddDispute={handleAddDispute} 
+            agreements={agreements} 
+            diaryEntries={diaryEntries} 
+          />;
           break;
       case ViewState.MESSAGES:
           MainContent = <MessagesView chatSessions={chatSessions} listings={listings} onOpenChat={handleOpenChatFromInbox} language={language} />;
           break;
       case ViewState.DIARY:
-          MainContent = <DiaryView entries={diaryEntries} onAddEntry={handleAddDiaryEntry} />;
+          MainContent = <DiaryView entries={diaryEntries} onAddEntry={handleAddDiaryEntry} agreements={agreements} />;
           break;
       default:
           MainContent = <Dashboard 
@@ -476,6 +550,7 @@ const App: React.FC = () => {
               onOpenAdvisor={handleOpenAdvisor} 
               onStartLiveCall={() => setIsLiveCallActive(true)} 
               onStartMatching={handleStartMatching} 
+              onOpenDisputes={() => setViewState(ViewState.DISPUTES)}
               language={language} 
           />;
   }
@@ -485,6 +560,7 @@ const App: React.FC = () => {
   
   const chatName = isGlobalAdvisorChat ? "Konaki Advisor" : (activeListing?.holderName || 'Motho');
   const chatRole = isGlobalAdvisorChat ? UserRole.NONE : role; 
+  const currentSessionId = isGlobalAdvisorChat ? 'konaki_advisor_global' : (activeListing?.id || '');
 
   return (
     <div className="fixed inset-0 w-full h-full bg-stone-50 flex flex-col md:flex-row overflow-hidden font-sans">
@@ -572,8 +648,16 @@ const App: React.FC = () => {
                             ←
                         </button>
                         
-                        <div className="w-8 h-8 mr-2 bg-white rounded-full p-1 shadow-sm shrink-0 flex items-center justify-center text-green-900">
-                            <Logo />
+                        <div className="w-9 h-9 rounded-full bg-stone-100 text-stone-300 flex-shrink-0 overflow-hidden border border-stone-200 flex items-center justify-center mr-2 p-1">
+                            {isGlobalAdvisorChat ? (
+                                <div className="w-5 h-5 text-green-900"><Logo /></div>
+                            ) : activeListing ? (
+                                <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                            ) : (
+                                '📝'
+                            )}
                         </div>
 
                         {isGlobalAdvisorChat ? (
@@ -641,10 +725,12 @@ const App: React.FC = () => {
                         onSendMessage={handleSendMessage}
                         onFinalizeAgreement={!isGlobalAdvisorChat ? handleFinalizeAgreement : undefined}
                         onClose={handleCloseChat}
+                        onTranslateMessage={(msgId) => handleTranslateMessage(currentSessionId, msgId)}
                         isLoading={isAiLoading}
                         activeRole={chatRole}
                         counterpartyName={chatName}
                         suggestions={currentSuggestions}
+                        currentLanguage={language}
                     />
                 </div>
             )}

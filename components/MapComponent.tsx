@@ -21,7 +21,13 @@ const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, 
   const markersLayer = useRef<any>(null);
 
   useEffect(() => {
-    if (!mapRef.current || !window.L) return;
+    if (!mapRef.current) return;
+    
+    // Safety check for Leaflet
+    if (!window.L) {
+        console.warn("Leaflet (window.L) is not available.");
+        return;
+    }
 
     // Initialize Map only once
     if (!mapInstance.current) {
@@ -29,8 +35,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, 
         
         mapInstance.current = window.L.map(mapRef.current).setView(defaultCenter, 9);
 
-        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         }).addTo(mapInstance.current);
         
         // Load Leaflet.markercluster CSS dynamically if not present
@@ -53,7 +59,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, 
              script.src = 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js';
              script.onload = () => {
                  // Re-trigger effect or handle ready state
-                 // For now, we rely on the component re-rendering or the next update
              };
              document.head.appendChild(script);
         }
@@ -154,6 +159,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ listings, onSelectListing, 
     return () => clearTimeout(timer);
 
   }, [listings, center, onSelectListing]);
+
+  // Render a placeholder if L is missing at first render (though it should be loaded from index.html)
+  if (typeof window !== 'undefined' && !window.L) {
+      return (
+          <div className="w-full h-full flex items-center justify-center bg-stone-100 text-stone-400">
+              <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 border-4 border-stone-300 border-t-green-600 rounded-full animate-spin mb-2"></div>
+                  <span className="text-xs font-bold">Loading Map...</span>
+              </div>
+          </div>
+      );
+  }
 
   return <div ref={mapRef} className="w-full h-full z-0 outline-none" />;
 };

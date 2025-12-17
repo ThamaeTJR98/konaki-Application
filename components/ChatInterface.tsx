@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { ChatMessage, UserRole } from '../types';
+import { ChatMessage, UserRole, Language } from '../types';
 import { transcribeAudio, generateSpeech } from '../services/geminiService';
 import { playPcmAudio } from '../services/audioService';
 import Logo from './Logo';
@@ -10,10 +10,12 @@ interface ChatInterfaceProps {
   onSendMessage: (text: string, attachment?: string) => void;
   onFinalizeAgreement?: () => void;
   onClose?: () => void;
+  onTranslateMessage: (messageId: string) => void;
   isLoading: boolean;
   activeRole: UserRole;
   counterpartyName: string;
   suggestions?: string[];
+  currentLanguage: Language;
 }
 
 const INITIAL_SUGGESTIONS = [
@@ -28,10 +30,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage, 
   onFinalizeAgreement, 
   onClose, 
+  onTranslateMessage,
   isLoading, 
   activeRole, 
   counterpartyName,
-  suggestions
+  suggestions,
+  currentLanguage
 }) => {
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -93,7 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       if(fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // --- Voice Input Logic ---
+  // --- Voice Input Logic (STT) ---
   const toggleRecording = async () => {
     if (isRecording) {
       stopRecording();
@@ -155,6 +159,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  // --- TTS Logic ---
   const playMessageAudio = async (text: string, id: string) => {
     if (playingMessageId) return;
     setPlayingMessageId(id);
@@ -173,13 +178,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Chat Header */}
       <div className="hidden md:flex bg-white/90 backdrop-blur p-3 px-4 border-b border-stone-200 items-center justify-between shadow-sm z-10 sticky top-0 shrink-0 h-16">
         <div className="flex items-center">
-            <div className="w-10 h-10 bg-gradient-to-br from-stone-200 to-stone-300 rounded-full flex items-center justify-center text-xl mr-3 border border-stone-300 shadow-inner">
-                👤
+            <div className="w-10 h-10 rounded-full bg-stone-100 text-stone-300 flex-shrink-0 overflow-hidden border border-stone-200 flex items-center justify-center mr-3 p-1.5">
+                {counterpartyName === 'Konaki Advisor' ? (
+                <div className="w-6 h-6 text-green-900"><Logo /></div>
+                ) : (
+                  <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                )}
             </div>
             <div>
                 <h2 className="font-bold text-stone-800 text-sm leading-tight">{counterpartyName}</h2>
                 <p className="text-[10px] text-green-700 font-bold uppercase tracking-wide">
-                    {activeRole === UserRole.FARMER ? "Mong'a Mobu" : "Sehoai"}
+                    {counterpartyName === 'Konaki Advisor' ? 'AI Assistant' : (activeRole === UserRole.FARMER ? "Mong'a Mobu" : "Sehoai")}
                 </p>
             </div>
         </div>
@@ -231,26 +242,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         {messages.map((msg) => {
           const isPlaying = playingMessageId === msg.id;
-
-          if (msg.sender === 'user') {
-            return (
-              <div key={msg.id} className="flex justify-end animate-fade-in-up">
-                <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
-                    {msg.attachment && (
-                        <div className="mb-1 rounded-xl overflow-hidden shadow-sm border border-stone-200">
-                             <img src={msg.attachment} alt="Attachment" className="max-h-48 object-cover" />
-                        </div>
-                    )}
-                    <div className="bg-gradient-to-br from-green-700 to-green-800 text-white p-3.5 rounded-2xl rounded-tr-sm shadow-md text-sm sm:text-base">
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                        <span className="text-[10px] opacity-70 block text-right mt-1 font-medium">Uena</span>
-                    </div>
-                </div>
-              </div>
-            );
-          } else if (msg.sender === 'konaki') {
-            return (
-              <div key={msg.id} className="flex justify-center my-2 sm:my-4 animate-fade-in">
+          const isUser = msg.sender === 'user';
+          
+          return (
+            <div key={msg.id} className={`flex ${msg.sender === 'konaki' ? 'justify-center my-2 sm:my-4' : isUser ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+              
+              {/* Konaki Intervention Bubble */}
+              {msg.sender === 'konaki' ? (
                 <div className="max-w-[95%] sm:max-w-[90%] bg-orange-50/80 backdrop-blur-sm border border-orange-100 p-3 sm:p-4 rounded-xl shadow-sm flex gap-3">
                    <div className="w-10 h-10 shrink-0">
                        <Logo isSpeaking={isPlaying} />
@@ -259,35 +257,62 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                        <h4 className="font-bold text-amber-900 text-xs sm:text-sm mb-1 uppercase tracking-wide">Keletso ea Konaki</h4>
                        <p className="text-amber-950 text-xs sm:text-sm leading-relaxed italic">"{msg.text}"</p>
                    </div>
-                   <button 
-                      onClick={() => playMessageAudio(msg.text, msg.id)}
-                      disabled={!!playingMessageId}
-                      className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isPlaying ? 'bg-orange-200 text-orange-900' : 'text-orange-400 hover:bg-orange-100'}`}
-                   >
-                     {isPlaying ? '🔊' : '🔈'}
-                   </button>
+                   <div className="flex flex-col gap-1">
+                       <button 
+                          onClick={() => playMessageAudio(msg.text, msg.id)}
+                          disabled={!!playingMessageId}
+                          className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isPlaying ? 'bg-orange-200 text-orange-900' : 'text-orange-400 hover:bg-orange-100'}`}
+                       >
+                         {isPlaying ? '🔊' : '🔈'}
+                       </button>
+                       <button 
+                          onClick={() => onTranslateMessage(msg.id)}
+                          className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${msg.isTranslated ? 'bg-amber-200 text-amber-900' : 'text-orange-400 hover:bg-orange-100'}`}
+                          title="Translate"
+                       >
+                         <span className="text-xs font-bold">A/文</span>
+                       </button>
+                   </div>
                 </div>
-              </div>
-            );
-          } else {
-            return (
-              <div key={msg.id} className="flex justify-start animate-fade-in-up">
-                 <div className="max-w-[85%] sm:max-w-[75%] bg-white border border-stone-200 text-stone-800 p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-sm sm:text-base relative group">
-                  <p className="whitespace-pre-wrap pr-6 leading-relaxed">{msg.text}</p>
-                  <div className="flex justify-between items-center mt-1 pt-1 border-t border-stone-50">
-                    <span className="text-[10px] text-stone-400 font-medium">{counterpartyName}</span>
-                    <button 
-                      onClick={() => playMessageAudio(msg.text, msg.id)}
-                      disabled={!!playingMessageId}
-                      className={`h-6 w-6 rounded-full flex items-center justify-center transition-colors ${isPlaying ? 'text-green-600' : 'text-stone-300 hover:text-green-600'}`}
-                    >
-                      {isPlaying ? '🔊' : '🔈'}
-                    </button>
-                  </div>
+              ) : (
+                <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end group">
+                    {msg.attachment && (
+                        <div className="mb-1 rounded-xl overflow-hidden shadow-sm border border-stone-200 self-start">
+                             <img src={msg.attachment} alt="Attachment" className="max-h-48 object-cover" />
+                        </div>
+                    )}
+                    <div className={`p-3.5 shadow-md text-sm sm:text-base relative ${isUser ? 'bg-gradient-to-br from-green-700 to-green-800 text-white rounded-2xl rounded-tr-sm' : 'bg-white border border-stone-200 text-stone-800 rounded-2xl rounded-tl-sm'}`}>
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        {!isUser && <span className="text-[10px] text-stone-400 font-medium mt-1 block">{counterpartyName}</span>}
+                        {isUser && <span className="text-[10px] opacity-70 block text-right mt-1 font-medium">Uena</span>}
+                        
+                        {/* Message Tools (TTS & Translate) */}
+                        <div className={`absolute -bottom-3 ${isUser ? '-left-8' : '-right-8'} flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
+                            <button 
+                              onClick={() => playMessageAudio(msg.text, msg.id)}
+                              disabled={!!playingMessageId}
+                              className={`h-7 w-7 rounded-full bg-white shadow-sm border border-stone-100 flex items-center justify-center transition-colors ${isPlaying ? 'text-green-600' : 'text-stone-400 hover:text-green-600'}`}
+                            >
+                              {isPlaying ? '🔊' : '🔈'}
+                            </button>
+                            <button 
+                              onClick={() => onTranslateMessage(msg.id)}
+                              className={`h-7 w-7 rounded-full bg-white shadow-sm border border-stone-100 flex items-center justify-center transition-colors ${msg.isTranslated ? 'text-blue-600 bg-blue-50' : 'text-stone-400 hover:text-blue-600'}`}
+                              title={msg.isTranslated ? "Show Original" : "Translate"}
+                            >
+                              <span className="text-[10px] font-bold">A/文</span>
+                            </button>
+                        </div>
+                        {/* Always visible generic Translate toggle for mobile */}
+                        <div className={`md:hidden absolute -bottom-8 ${isUser ? 'left-0' : 'right-0'} flex gap-2`}>
+                             <button onClick={() => playMessageAudio(msg.text, msg.id)} className="text-stone-400 p-1">🔈</button>
+                             <button onClick={() => onTranslateMessage(msg.id)} className={`p-1 ${msg.isTranslated ? 'text-blue-500' : 'text-stone-400'}`}>A/文</button>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            );
-          }
+              )}
+            </div>
+          );
         })}
         
         {isLoading && (
@@ -364,6 +389,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             </label>
 
+            {/* STT / Voice Input Button */}
             <button 
                 onClick={toggleRecording}
                 disabled={isTranscribing || isLoading}

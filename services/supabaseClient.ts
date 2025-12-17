@@ -1,10 +1,31 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Access environment variables. 
-// Support both process.env (Sandbox) and import.meta.env (Vite/Vercel)
-const supabaseUrl = process.env.VITE_SUPABASE_URL || (import.meta as any).env?.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+// Safe environment variable access
+const getEnv = (key: string) => {
+  try {
+    // Check process.env (Node/Sandbox)
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+  } catch (e) {
+    // ignore
+  }
+  
+  try {
+    // Check import.meta.env (Vite)
+    if ((import.meta as any)?.env?.[key]) {
+      return (import.meta as any).env[key];
+    }
+  } catch (e) {
+    // ignore
+  }
+  
+  return '';
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
 let supabase: any = null;
 

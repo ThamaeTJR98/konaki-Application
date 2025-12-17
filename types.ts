@@ -1,6 +1,4 @@
 
-
-
 export enum UserRole {
   FARMER = 'SEHOAI',
   LANDHOLDER = 'MONGA_MOBU',
@@ -16,6 +14,10 @@ export interface ChatMessage {
   isIntervention?: boolean; // If true, this is Konaki stepping in
   attachment?: string; // Base64 image string
   attachmentType?: 'image';
+  
+  // Translation Support
+  isTranslated?: boolean;
+  originalText?: string;
 }
 
 // Generalized to support both Land and Equipment

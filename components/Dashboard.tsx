@@ -1,8 +1,6 @@
 
-
-
 import React, { useState, useRef, useEffect } from 'react';
-import { UserRole, Listing, FarmerProfile, Language } from '../types';
+import { UserRole, Listing, FarmerProfile, Language, ViewState } from '../types';
 import { DISTRICTS } from '../constants';
 import { translations } from '../translations';
 import LandCard from './LandCard';
@@ -24,14 +22,15 @@ interface DashboardProps {
   language: Language;
 }
 
-// FIX: Added FabButton helper component
 const FabButton = ({ label, icon, onClick }: { label: string, icon: string, onClick?: () => void }) => (
-    <div className="flex items-center gap-3 animate-fade-in-up">
-        <span className="bg-white/90 text-stone-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">{label}</span>
-        <button onClick={onClick} className="w-12 h-12 rounded-full bg-white text-2xl shadow-md flex items-center justify-center">
-            {icon}
-        </button>
-    </div>
+    <button 
+        onClick={onClick} 
+        title={label} // Keep for accessibility
+        aria-label={label}
+        className="w-14 h-14 rounded-full bg-white text-3xl shadow-lg flex items-center justify-center hover:bg-stone-100 transition-transform active:scale-95 animate-fade-in-up"
+    >
+        {icon}
+    </button>
 );
 
 const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onUpdateListing, onDeleteListing, onOpenAdvisor, onStartLiveCall, onStartMatching, onOpenDisputes, language }) => {
@@ -199,7 +198,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
     }
 
     handleCloseModal();
-    // FIX: Correctly check if the user can add listings
     const canAddListing = role === UserRole.LANDHOLDER || role === UserRole.PROVIDER;
     if (canAddListing) setShowMyListingsOnly(true);
   };
@@ -261,10 +259,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
       }
   };
 
-  // FIX: Define canAddListing based on user role
   const canAddListing = role === UserRole.LANDHOLDER || role === UserRole.PROVIDER;
 
-  // FIX: Added return statement with full component JSX
   return (
     <div className="h-full flex flex-col bg-stone-100">
       {/* Header */}
@@ -312,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
       </div>
       
       {/* Main Content */}
-      <main ref={contentRef} className="flex-1 overflow-y-auto p-4 sm:p-6 relative">
+      <main ref={contentRef} className={`flex-1 overflow-y-auto relative ${viewMode === 'list' ? 'p-4 sm:p-6' : ''}`}>
         {viewMode === 'list' ? (
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredListings.map(listing => (
@@ -329,7 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
         ) : (
           <MapComponent listings={filteredListings} onSelectListing={onSelectListing} />
         )}
-        {filteredListings.length === 0 && (
+        {filteredListings.length === 0 && viewMode === 'list' && (
           <div className="text-center py-20 text-stone-400">
             <span className="text-5xl">🤷‍♀️</span>
             <p className="mt-4 font-medium">No listings found for this district.</p>
@@ -340,7 +336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
       {/* FAB Menu */}
       <div className="absolute bottom-6 right-6 z-20">
         {isFabMenuOpen && (
-          <div className="flex flex-col items-center gap-3 mb-4">
+          <div className="flex flex-col items-end gap-4 mb-4">
             {role === UserRole.FARMER && (
               <FabButton label="AI Match" icon="🔥" onClick={handleStartProfile} />
             )}
@@ -348,12 +344,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
               <FabButton label="Add New" icon="➕" onClick={handleOpenAddModal} />
             )}
             {onOpenAdvisor && <FabButton label="Advisor" icon="💬" onClick={onOpenAdvisor} />}
+            {onOpenDisputes && <FabButton label="Report Dispute" icon="🚨" onClick={() => { onOpenDisputes?.(); setIsFabMenuOpen(false); }} />}
             {onStartLiveCall && <FabButton label="Live Call" icon="🎙️" onClick={onStartLiveCall} />}
           </div>
         )}
         <button 
           onClick={() => setIsFabMenuOpen(!isFabMenuOpen)}
-          className={`w-16 h-16 rounded-full bg-green-700 text-white shadow-lg flex items-center justify-center text-3xl transition-transform duration-300 hover:bg-green-800 ${isFabMenuOpen ? 'rotate-45' : ''}`}
+          className={`w-16 h-16 rounded-full bg-green-700 text-white shadow-lg flex items-center justify-center text-3xl transition-transform duration-300 hover:bg-green-800 ${isFabMenuOpen ? 'rotate-[-135deg]' : ''}`}
         >
           ＋
         </button>

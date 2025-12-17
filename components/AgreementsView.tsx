@@ -260,7 +260,12 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgr
                                         <div><div className="h-12 border-b border-stone-400 mb-1"></div><p className="text-[10px] text-stone-500 uppercase">Witness 2 (Name & Sign)</p></div>
                                     </div>
                                 </div>
+                                
+                                <div className="text-center text-xs text-stone-500 mt-12 italic no-print px-8">
+                                    <strong>Disclaimer:</strong> Tumellano ena ke mohlala feela. It is advisable to have it reviewed by the Local Council before it is considered legally binding.
+                                </div>
                             </div>
+
                             <div className="bg-stone-50 p-4 px-8 border-t border-stone-200 flex justify-end items-center gap-3 no-print">
                                 {(agreement.status === 'Signed' || agreement.status === 'Active') && onUpdateAgreement && (
                                     <button onClick={() => handleRetract(agreement)} className="px-4 py-2 bg-red-50 text-red-700 rounded text-sm font-bold hover:bg-red-100 border border-red-200 transition-colors">

@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { Dispute, DisputeType } from '../types';
+import { Dispute, DisputeType, Agreement, DiaryEntry } from '../types';
 import { generateDisputeAdvice } from '../services/geminiService';
 
 interface DisputesViewProps {
   disputes: Dispute[];
+  agreements?: Agreement[]; // New Prop: context for dispute
+  diaryEntries?: DiaryEntry[]; // New Prop: evidence for dispute
   onAddDispute: (dispute: Dispute) => void;
 }
 
-const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) => {
+const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute, agreements = [], diaryEntries = [] }) => {
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(disputes.length > 0 ? disputes[0].id : null);
   
@@ -16,6 +18,7 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
   const [type, setType] = useState<DisputeType>(DisputeType.DAMAGE);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
+  const [relatedAgreementId, setRelatedAgreementId] = useState('');
   const [isGettingAdvice, setIsGettingAdvice] = useState(false);
 
   const toggleExpand = (id: string) => {
@@ -26,7 +29,17 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
     e.preventDefault();
     setIsGettingAdvice(true);
     
-    const advice = await generateDisputeAdvice(type, desc);
+    // Gather Context
+    const selectedAgreement = agreements.find(a => a.id === relatedAgreementId);
+    // Filter diary entries related to this agreement for "Detailed Dispute Dissolution"
+    const relevantHistory = selectedAgreement 
+        ? diaryEntries.filter(d => d.relatedId === selectedAgreement.id) 
+        : [];
+
+    const advice = await generateDisputeAdvice(type, desc, {
+        agreement: selectedAgreement,
+        history: relevantHistory
+    });
     
     const newDispute: Dispute = {
         id: Date.now().toString(),
@@ -47,6 +60,7 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
     
     setTitle('');
     setDesc('');
+    setRelatedAgreementId('');
     setType(DisputeType.DAMAGE);
   };
 
@@ -117,7 +131,7 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
        <div className="mb-8 flex justify-between items-center max-w-4xl mx-auto">
         <div>
             <h2 className="text-2xl font-bold text-stone-800">Likhohlano (Disputes)</h2>
-            <p className="text-stone-500 text-sm">Tlaleha mathata ho fumana likeletso tsa molao.</p>
+            <p className="text-stone-500 text-sm">Tlaleha mathata ho fumana likeletso tsa molao (Report issues for legal advice).</p>
         </div>
         <button 
             onClick={() => setShowModal(true)}
@@ -176,6 +190,10 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
                                 </div>
                             )}
                             
+                            <div className="text-xs text-stone-500 mt-3 italic no-print">
+                                <strong>Please Note:</strong> This is automated advice based on the Land Act 2010 and is not a legal judgment. Please consult with your Morena or Local Council.
+                            </div>
+                            
                             <div className="mt-4 pt-4 border-t border-stone-100 flex justify-end gap-3">
                                 <button className="text-stone-500 text-sm hover:text-stone-800 font-medium">Koala (Resolve)</button>
                                 <button 
@@ -203,7 +221,7 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
        {/* Report Modal */}
        {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-fade-in-up">
+            <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-stone-800">Tlaleha Khohlano</h3>
                     <button onClick={() => setShowModal(false)} className="text-stone-400 hover:text-stone-600">✕</button>
@@ -221,6 +239,22 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
+                    </div>
+                    
+                    {/* Agreement Selector */}
+                    <div>
+                        <label className="block text-sm font-bold text-stone-700 mb-1">Tumellano e Ametsoeng (Related Agreement)</label>
+                        <select 
+                            value={relatedAgreementId}
+                            onChange={(e) => setRelatedAgreementId(e.target.value)}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:ring-2 focus:ring-red-500 outline-none bg-stone-50"
+                        >
+                            <option value="">-- Ha e amane le Tumellano e Ngotsoeng --</option>
+                            {agreements.map(a => (
+                                <option key={a.id} value={a.id}>{a.title} ({a.status})</option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-stone-400 mt-1">Konaki will analyze the agreement terms to help solve this.</p>
                     </div>
 
                     <div>

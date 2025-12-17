@@ -15,8 +15,19 @@ export class LiveClient {
   public onVolumeUpdate: ((vol: number) => void) | null = null;
 
   constructor() {
-    // Support both process.env (Sandbox) and import.meta.env (Vite/Vercel)
-    const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY || "";
+    let apiKey = "";
+    try {
+        if (typeof process !== 'undefined' && process.env?.API_KEY) {
+            apiKey = process.env.API_KEY;
+        }
+    } catch (e) {}
+
+    if (!apiKey) {
+        try {
+            apiKey = (import.meta as any)?.env?.VITE_API_KEY || "";
+        } catch (e) {}
+    }
+
     if (!apiKey) {
       console.warn("KONAKI Live: Missing API Key");
     }
