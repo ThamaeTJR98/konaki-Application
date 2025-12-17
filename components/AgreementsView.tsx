@@ -10,14 +10,45 @@ interface AgreementsViewProps {
 const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgreement }) => {
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<'tenant' | 'landholder'>('tenant');
+  const [expandedId, setExpandedId] = useState<string | null>(agreements.length > 0 ? agreements[0].id : null);
   
   // Signature Pad State
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  const handleDownload = () => {
-    window.print();
+  const toggleExpand = (id: string) => {
+    setExpandedId(currentId => (currentId === id ? null : id));
+  };
+  
+  const handleRetract = (agreement: Agreement) => {
+      if (!onUpdateAgreement) return;
+      if (window.confirm("Are you sure you want to retract this agreement? This action marks it as void and cannot be undone.")) {
+          onUpdateAgreement({ ...agreement, status: 'Retracted' });
+      }
+  };
+
+  const handleDownload = (agreementId: string) => {
+    // Ensure the card to be printed is expanded
+    setExpandedId(agreementId);
+    
+    // A short delay allows the expand animation to complete before printing
+    setTimeout(() => {
+        const allCards = document.querySelectorAll('.agreement-card');
+        allCards.forEach(card => {
+            if (card.id !== `agreement-${agreementId}`) {
+                card.classList.remove('print-content'); // Hide other cards from print view
+            }
+        });
+        
+        window.print();
+        
+        // Restore classes after print dialog is closed
+        allCards.forEach(card => {
+            card.classList.add('print-content');
+        });
+
+    }, 500);
   };
 
   const startSigning = (id: string, role: 'tenant' | 'landholder') => {
@@ -118,153 +149,139 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgr
         <p className="text-stone-600 mt-1">Laola litumellano tsa hau tsa molao.</p>
       </div>
 
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
         {agreements.length > 0 ? (
-          agreements.map(agreement => (
-            <div key={agreement.id} className="print-content bg-white rounded-none shadow-lg border border-stone-200 relative overflow-hidden print:shadow-none animate-fade-in break-after-page mb-8">
-                {/* Paper Texture Header */}
-                <div className={`h-3 w-full border-b-2 border-stone-200 ${agreement.listingCategory === 'EQUIPMENT' ? 'bg-orange-800' : 'bg-green-900'}`}></div>
-                <div className="p-8 sm:p-12">
-                    
-                    {/* Official Legal Preamble */}
-                    <div className="text-center mb-8 pb-4 border-b-2 border-stone-900">
-                         <div className="text-sm font-bold uppercase tracking-widest text-stone-500 mb-2">The Kingdom of Lesotho</div>
-                         <h3 className="font-serif text-3xl font-black text-stone-900 uppercase mb-1">{agreement.title}</h3>
-                         <p className="text-xs text-stone-500 font-medium">Made in accordance with the <strong>Land Act 2010</strong></p>
-                    </div>
+          agreements.map(agreement => {
+            const isExpanded = expandedId === agreement.id;
+            
+            const statusTextClass = {
+                'Draft': 'text-amber-600', 'Active': 'text-blue-600', 'Signed': 'text-green-600',
+                'Expired': 'text-stone-500', 'Retracted': 'text-red-600 line-through'
+            }[agreement.status];
+            
+            const statusBadgeClass = {
+                'Draft': 'bg-amber-100 text-amber-700', 'Active': 'bg-blue-100 text-blue-700', 'Signed': 'bg-green-100 text-green-700',
+                'Expired': 'bg-stone-100 text-stone-500', 'Retracted': 'bg-red-100 text-red-700'
+            }[agreement.status];
 
-                    {/* Meta Data */}
-                    <div className="flex justify-between items-center mb-8 text-xs font-mono text-stone-500">
-                        <span>REF: {agreement.id.toUpperCase()}</span>
-                        <span>DATE: {agreement.dateCreated}</span>
-                        <span className={`px-2 py-0.5 border ${agreement.status === 'Signed' ? 'border-green-600 text-green-700' : 'border-amber-400 text-amber-600'} rounded font-bold`}>
-                            STATUS: {agreement.status.toUpperCase()}
-                        </span>
-                    </div>
-
-                    {/* Parties Section */}
-                    <div className="mb-8 bg-stone-50 p-6 border border-stone-200">
-                        <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider mb-4 border-b border-stone-200 pb-2">Parties to the Agreement</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                            <div>
-                                <p className="text-xs text-stone-500 uppercase font-bold mb-1">Provider / Landholder (Mofani)</p>
-                                <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.landholder}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-stone-500 uppercase font-bold mb-1">Tenant / Client (Moamoheli)</p>
-                                <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.tenant}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Terms / Clauses */}
-                    <div className="space-y-6 mb-10">
-                        <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider border-b border-stone-200 pb-2 mb-4">Terms & Conditions</h4>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                            <ClauseItem number="1" label="Nako (Duration)" value={agreement.clauses.duration} />
-                            <ClauseItem number="2" label="Tefo (Payment Terms)" value={agreement.clauses.paymentTerms} />
-                            
-                            {/* Conditional Rendering based on type */}
-                            {agreement.clauses.landUse && (
-                                <ClauseItem number="3" label="Tšebeliso (Permitted Land Use)" value={agreement.clauses.landUse} />
-                            )}
-                            {agreement.clauses.fuelPolicy && (
-                                <ClauseItem number="3" label="Mafura (Fuel Policy)" value={agreement.clauses.fuelPolicy} />
-                            )}
-                            {agreement.clauses.operatorIncluded && (
-                                <ClauseItem number="4" label="Mokhanni (Operator)" value={agreement.clauses.operatorIncluded} />
-                            )}
-                            {agreement.clauses.damageLiability && (
-                                <ClauseItem number="5" label="Tšenyo (Damage Liability)" value={agreement.clauses.damageLiability} />
-                            )}
-                             <ClauseItem number="6" label="Qetello (Termination)" value={agreement.clauses.termination} />
-                             
-                             <div className="mt-4 pt-4 text-xs text-stone-500 italic">
-                                 * This agreement is binding upon the parties and their successors in title. Disputes shall be referred to the Local Council.
-                             </div>
-                        </div>
-                    </div>
-
-                    {/* Signatures */}
-                    <div className="mt-12 pt-8 border-t-2 border-stone-900 break-inside-avoid">
-                         <h4 className="font-bold text-stone-900 uppercase text-center text-xs tracking-wider mb-8">Signatures of Parties</h4>
-                         
-                         <div className="grid grid-cols-2 gap-12 mb-12">
-                             {/* Provider */}
-                             <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.landholder && startSigning(agreement.id, 'landholder')}>
-                                <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">
-                                    {agreement.signatures?.landholder ? (
-                                        <img src={agreement.signatures.landholder} alt="Signed" className="max-h-20 mix-blend-multiply" />
-                                    ) : (
-                                        <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>
-                                    )}
-                                </div>
-                                <p className="text-xs text-stone-900 uppercase font-bold">Provider / Landholder</p>
-                                <p className="text-[10px] text-stone-500">Date: .......................................</p>
-                             </div>
-                             
-                             {/* Tenant */}
-                             <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.tenant && startSigning(agreement.id, 'tenant')}>
-                                <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">
-                                    {agreement.signatures?.tenant ? (
-                                        <img src={agreement.signatures.tenant} alt="Signed" className="max-h-20 mix-blend-multiply" />
-                                    ) : (
-                                        <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>
-                                    )}
-                                </div>
-                                <p className="text-xs text-stone-900 uppercase font-bold">Tenant / Client</p>
-                                <p className="text-[10px] text-stone-500">Date: .......................................</p>
-                             </div>
-                         </div>
-
-                         {/* Witnesses */}
-                         <div className="grid grid-cols-2 gap-12 opacity-70">
-                             <div>
-                                <div className="h-12 border-b border-stone-400 mb-1"></div>
-                                <p className="text-[10px] text-stone-500 uppercase">Witness 1 (Name & Sign)</p>
-                             </div>
-                             <div>
-                                <div className="h-12 border-b border-stone-400 mb-1"></div>
-                                <p className="text-[10px] text-stone-500 uppercase">Witness 2 (Name & Sign)</p>
-                             </div>
-                         </div>
-
-                    </div>
-
-                </div>
-                
-                {/* Actions Footer */}
-                <div className="bg-stone-50 p-4 px-8 border-t border-stone-200 flex justify-end gap-3 no-print">
-                    <button 
-                        onClick={handleDownload}
-                        className="px-4 py-2 bg-white border border-stone-300 rounded text-sm font-medium hover:bg-stone-100 transition-colors flex items-center gap-2"
+            return (
+                <div id={`agreement-${agreement.id}`} key={agreement.id} className="agreement-card print-content bg-white rounded-xl shadow-lg border border-stone-200 relative overflow-hidden print:shadow-none animate-fade-in break-after-page">
+                    {/* Clickable Header */}
+                    <div 
+                        className="p-6 cursor-pointer hover:bg-stone-50/50 transition-colors flex justify-between items-start gap-4 no-print"
+                        onClick={() => toggleExpand(agreement.id)}
                     >
-                        <span>🖨️</span> Print / Save PDF
-                    </button>
-                    {agreement.status !== 'Signed' && onUpdateAgreement && (
-                         <div className="flex gap-2">
-                             {!agreement.signatures?.landholder && (
-                                <button 
-                                    onClick={() => startSigning(agreement.id, 'landholder')}
-                                    className="px-4 py-2 bg-stone-200 text-stone-700 rounded text-sm font-bold hover:bg-stone-300 transition-colors"
-                                >
-                                    Sign (Provider)
+                        <div className="flex-1">
+                            <h3 className="font-bold text-stone-900 text-lg leading-tight">{agreement.title}</h3>
+                            <p className="text-sm text-stone-500 mt-1">
+                                With: {agreement.parties.landholder} • Status: 
+                                <span className={`font-bold ml-1 ${statusTextClass}`}>
+                                    {agreement.status}
+                                </span>
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-4 pt-1">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase hidden sm:block ${statusBadgeClass}`}>
+                                {agreement.status}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`w-6 h-6 text-stone-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    {/* Collapsible Content */}
+                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[3000px]' : 'max-h-0'}`}>
+                        <div className="border-t border-stone-200">
+                            {/* Paper Texture Header */}
+                            <div className={`h-3 w-full border-b-2 border-stone-200 ${agreement.listingCategory === 'EQUIPMENT' ? 'bg-orange-800' : 'bg-green-900'}`}></div>
+                            <div className="p-8 sm:p-12">
+                                {/* Legal Preamble */}
+                                <div className="text-center mb-8 pb-4 border-b-2 border-stone-900">
+                                    <div className="text-sm font-bold uppercase tracking-widest text-stone-500 mb-2">The Kingdom of Lesotho</div>
+                                    <h3 className="font-serif text-3xl font-black text-stone-900 uppercase mb-1">{agreement.title}</h3>
+                                    <p className="text-xs text-stone-500 font-medium">Made in accordance with the <strong>Land Act 2010</strong></p>
+                                </div>
+                                {/* Meta Data */}
+                                <div className="flex justify-between items-center mb-8 text-xs font-mono text-stone-500">
+                                    <span>REF: {agreement.id.toUpperCase()}</span>
+                                    <span>DATE: {agreement.dateCreated}</span>
+                                    <span className={`px-2 py-0.5 border ${statusBadgeClass} rounded font-bold`}>
+                                        STATUS: {agreement.status.toUpperCase()}
+                                    </span>
+                                </div>
+                                {/* Parties Section */}
+                                <div className="mb-8 bg-stone-50 p-6 border border-stone-200">
+                                    <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider mb-4 border-b border-stone-200 pb-2">Parties to the Agreement</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                        <div>
+                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Provider / Landholder (Mofani)</p>
+                                            <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.landholder}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Tenant / Client (Moamoheli)</p>
+                                            <p className="font-serif text-xl font-bold text-stone-900">{agreement.parties.tenant}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Terms / Clauses */}
+                                <div className="space-y-6 mb-10">
+                                    <h4 className="font-bold text-stone-900 uppercase text-xs tracking-wider border-b border-stone-200 pb-2 mb-4">Terms & Conditions</h4>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <ClauseItem number="1" label="Nako (Duration)" value={agreement.clauses.duration} />
+                                        <ClauseItem number="2" label="Tefo (Payment Terms)" value={agreement.clauses.paymentTerms} />
+                                        {agreement.clauses.landUse && <ClauseItem number="3" label="Tšebeliso (Permitted Land Use)" value={agreement.clauses.landUse} />}
+                                        {agreement.clauses.fuelPolicy && <ClauseItem number="3" label="Mafura (Fuel Policy)" value={agreement.clauses.fuelPolicy} />}
+                                        {agreement.clauses.operatorIncluded && <ClauseItem number="4" label="Mokhanni (Operator)" value={agreement.clauses.operatorIncluded} />}
+                                        {agreement.clauses.damageLiability && <ClauseItem number="5" label="Tšenyo (Damage Liability)" value={agreement.clauses.damageLiability} />}
+                                        <ClauseItem number="6" label="Qetello (Termination)" value={agreement.clauses.termination} />
+                                        <div className="mt-4 pt-4 text-xs text-stone-500 italic">
+                                            * This agreement is binding upon the parties and their successors in title. Disputes shall be referred to the Local Council.
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Signatures */}
+                                <div className="mt-12 pt-8 border-t-2 border-stone-900 break-inside-avoid">
+                                    <h4 className="font-bold text-stone-900 uppercase text-center text-xs tracking-wider mb-8">Signatures of Parties</h4>
+                                    <div className="grid grid-cols-2 gap-12 mb-12">
+                                        <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.landholder && startSigning(agreement.id, 'landholder')}>
+                                            <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">{agreement.signatures?.landholder ? <img src={agreement.signatures.landholder} alt="Signed" className="max-h-20 mix-blend-multiply" /> : <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>}</div>
+                                            <p className="text-xs text-stone-900 uppercase font-bold">Provider / Landholder</p>
+                                            <p className="text-[10px] text-stone-500">Date: .......................................</p>
+                                        </div>
+                                        <div className="relative group cursor-pointer" onClick={() => !agreement.signatures?.tenant && startSigning(agreement.id, 'tenant')}>
+                                            <div className="h-24 border-b border-stone-900 mb-2 flex items-end justify-center relative bg-stone-50/50">{agreement.signatures?.tenant ? <img src={agreement.signatures.tenant} alt="Signed" className="max-h-20 mix-blend-multiply" /> : <span className="text-stone-300 text-sm font-serif italic opacity-50 px-2 py-4">Signature</span>}</div>
+                                            <p className="text-xs text-stone-900 uppercase font-bold">Tenant / Client</p>
+                                            <p className="text-[10px] text-stone-500">Date: .......................................</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-12 opacity-70">
+                                        <div><div className="h-12 border-b border-stone-400 mb-1"></div><p className="text-[10px] text-stone-500 uppercase">Witness 1 (Name & Sign)</p></div>
+                                        <div><div className="h-12 border-b border-stone-400 mb-1"></div><p className="text-[10px] text-stone-500 uppercase">Witness 2 (Name & Sign)</p></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-stone-50 p-4 px-8 border-t border-stone-200 flex justify-end items-center gap-3 no-print">
+                                {(agreement.status === 'Signed' || agreement.status === 'Active') && onUpdateAgreement && (
+                                    <button onClick={() => handleRetract(agreement)} className="px-4 py-2 bg-red-50 text-red-700 rounded text-sm font-bold hover:bg-red-100 border border-red-200 transition-colors">
+                                        Retract Agreement
+                                    </button>
+                                )}
+                                <button onClick={() => handleDownload(agreement.id)} className="px-4 py-2 bg-white border border-stone-300 rounded text-sm font-medium hover:bg-stone-100 transition-colors flex items-center gap-2">
+                                    <span>🖨️</span> Print / Save PDF
                                 </button>
-                             )}
-                             {!agreement.signatures?.tenant && (
-                                <button 
-                                    onClick={() => startSigning(agreement.id, 'tenant')}
-                                    className="px-4 py-2 bg-green-700 text-white rounded text-sm font-bold hover:bg-green-800 transition-colors shadow-sm"
-                                >
-                                    Sign (Tenant)
-                                </button>
-                             )}
-                         </div>
-                    )}
+                                {agreement.status !== 'Signed' && agreement.status !== 'Retracted' && onUpdateAgreement && (
+                                    <div className="flex gap-2">
+                                        {!agreement.signatures?.landholder && <button onClick={() => startSigning(agreement.id, 'landholder')} className="px-4 py-2 bg-stone-200 text-stone-700 rounded text-sm font-bold hover:bg-stone-300 transition-colors">Sign (Provider)</button>}
+                                        {!agreement.signatures?.tenant && <button onClick={() => startSigning(agreement.id, 'tenant')} className="px-4 py-2 bg-green-700 text-white rounded text-sm font-bold hover:bg-green-800 transition-colors shadow-sm">Sign (Tenant)</button>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-          ))
+            )
+        })
         ) : (
             <div className="flex flex-col items-center justify-center py-20 text-stone-400 bg-white border-2 border-dashed border-stone-200 rounded-xl">
                 <span className="text-5xl mb-4 text-stone-200">⚖️</span>
@@ -282,7 +299,6 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgr
                     {signingRole === 'tenant' ? 'Menoana ea Hiriso (Tenant Sign)' : "Menoana ea Mong'a Mobu (Provider Sign)"}
                 </h3>
                 <p className="text-stone-500 text-sm mb-4">Please draw your signature below using your finger or mouse.</p>
-                
                 <div className="border-2 border-dashed border-stone-300 rounded-lg mb-4 bg-stone-50 touch-none">
                     <canvas 
                         ref={canvasRef}
@@ -298,21 +314,11 @@ const AgreementsView: React.FC<AgreementsViewProps> = ({ agreements, onUpdateAgr
                         onTouchEnd={stopDrawing}
                     />
                 </div>
-                
                 <div className="flex justify-between items-center">
                     <button onClick={clearCanvas} className="text-sm text-red-500 hover:text-red-700 font-medium">Clear</button>
                     <div className="flex gap-3">
-                         <button 
-                            onClick={() => setSigningId(null)}
-                            className="px-4 py-2 bg-stone-100 text-stone-600 rounded-lg font-medium hover:bg-stone-200"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={saveSignature}
-                            disabled={!hasSignature}
-                            className={`px-4 py-2 rounded-lg font-bold text-white transition-colors ${hasSignature ? 'bg-green-700 hover:bg-green-800' : 'bg-stone-300'}`}
-                        >
+                         <button onClick={() => setSigningId(null)} className="px-4 py-2 bg-stone-100 text-stone-600 rounded-lg font-medium hover:bg-stone-200">Cancel</button>
+                        <button onClick={saveSignature} disabled={!hasSignature} className={`px-4 py-2 rounded-lg font-bold text-white transition-colors ${hasSignature ? 'bg-green-700 hover:bg-green-800' : 'bg-stone-300'}`}>
                             Save Signature
                         </button>
                     </div>

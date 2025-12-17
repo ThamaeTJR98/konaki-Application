@@ -19,28 +19,38 @@ const MatchingView: React.FC<MatchingViewProps> = ({ listings, userProfile, onLi
   // AI State
   const [insights, setInsights] = useState<Record<string, MatchInsight>>({});
   const [isCalculating, setIsCalculating] = useState(true);
+  const [candidateListings, setCandidateListings] = useState<Listing[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef<number>(0);
   
-  // Filter listings based on profile district initially (simple heuristic)
-  // then pass to AI for deeper ranking
-  const candidateListings = useRef<Listing[]>(listings).current; 
-  
   useEffect(() => {
-      const fetchScores = async () => {
-          setIsCalculating(true);
-          // Only rank the first 5-10 to save tokens and time
-          const batch = candidateListings.slice(0, 8);
-          const results = await calculateMatchScores(userProfile, batch);
-          
-          const map: Record<string, MatchInsight> = {};
-          results.forEach(r => map[r.listingId] = r);
-          setInsights(map);
-          setIsCalculating(false);
-      };
-      fetchScores();
-  }, [userProfile]); // Run once on mount or profile change
+    // Pre-filter listings based on profile before sending to AI
+    const filtered = listings.filter(l => 
+        userProfile.preferredDistricts.includes(l.district)
+    );
+    // If filter results in 0, fallback to all listings to have something to show
+    const candidates = filtered.length > 0 ? filtered : listings;
+    setCandidateListings(candidates);
+
+    const fetchScores = async (listingsToScore: Listing[]) => {
+        setIsCalculating(true);
+        // Only rank a reasonable batch to save tokens and time
+        const batch = listingsToScore.slice(0, 10);
+        if (batch.length === 0) {
+            setIsCalculating(false);
+            return;
+        }
+        const results = await calculateMatchScores(userProfile, batch);
+        
+        const map: Record<string, MatchInsight> = {};
+        results.forEach(r => map[r.listingId] = r);
+        setInsights(map);
+        setIsCalculating(false);
+    };
+
+    fetchScores(candidates);
+  }, [userProfile, listings]);
 
   const currentListing = candidateListings[currentIndex];
   const nextListing = candidateListings[currentIndex + 1];
@@ -88,7 +98,27 @@ const MatchingView: React.FC<MatchingViewProps> = ({ listings, userProfile, onLi
     }, 200);
   };
 
-  if (!currentListing) return null;
+  if (isCalculating && candidateListings.length === 0) {
+      return (
+        <div className="fixed inset-0 z-50 bg-stone-900 flex flex-col items-center justify-center font-sans text-white">
+            <div className="w-24 h-24 mb-6"><Logo isThinking={true} /></div>
+            <h2 className="text-xl font-bold">Finding your matches...</h2>
+            <p className="text-stone-400">Konaki is analyzing the best options for you.</p>
+        </div>
+      );
+  }
+
+  if (!currentListing) {
+    return (
+        <div className="fixed inset-0 z-50 bg-stone-900 flex flex-col items-center justify-center font-sans text-white text-center p-8">
+            <span className="text-5xl mb-4">🤷</span>
+            <h2 className="text-xl font-bold">No More Listings</h2>
+            <p className="text-stone-400 mb-6">There are no more listings that match your profile right now. Check back later!</p>
+            <button onClick={onClose} className="bg-green-600 px-6 py-2 rounded-lg font-bold">Back to Dashboard</button>
+        </div>
+    );
+  }
+
 
   const rotate = dragX * 0.05;
   const likeOpacity = Math.min(Math.max(dragX / 100, 0), 1);
@@ -100,8 +130,8 @@ const MatchingView: React.FC<MatchingViewProps> = ({ listings, userProfile, onLi
       {/* Header with Top-Left Logo */}
       <div className="h-20 flex items-center justify-between px-6 z-20 pt-safe">
          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-white rounded-full p-2 shadow-lg flex items-center justify-center ring-2 ring-stone-800">
-                 <Logo isSpeaking={isCalculating} />
+             <div className="w-10 h-10 bg-white rounded-full p-2 shadow-lg flex items-center justify-center ring-2 ring-stone-800 text-green-900">
+                 <Logo isThinking={isCalculating} />
              </div>
              <div>
                 <span className="text-white font-bold text-xl tracking-tight leading-none block">Konaki</span>
@@ -152,7 +182,7 @@ const MatchingView: React.FC<MatchingViewProps> = ({ listings, userProfile, onLi
                           <span className={`font-bold text-sm ${currentInsight.score > 80 ? 'text-green-600' : 'text-orange-500'}`}>
                               {currentInsight.score}% Match
                           </span>
-                          <div className="w-4 h-4"><Logo /></div>
+                          <div className="w-4 h-4 text-green-900"><Logo /></div>
                       </div>
                   ) : isCalculating ? (
                       <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-none">

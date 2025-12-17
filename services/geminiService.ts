@@ -1,7 +1,9 @@
 
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { KONAKI_SYSTEM_INSTRUCTION } from "../constants";
-import { ChatMessage, GeminiResponse, Agreement, CashBookEntry, Listing, FarmerProfile, MatchInsight } from "../types";
+// FIX: Import CashBookEntry to be used in the new analyzeCashBook function.
+import { ChatMessage, GeminiResponse, Agreement, Listing, FarmerProfile, MatchInsight, CashBookEntry } from "../types";
 
 // Initialize Gemini Client Lazily to avoid top-level crashes if env vars are missing during load
 let aiInstance: GoogleGenAI | null = null;
@@ -69,10 +71,11 @@ export const sendMessageToGemini = async (
           
           INSTRUCTIONS:
           1. If the user asks for land/equipment, search the DATABASE.
-          2. If you find matches, recommend them clearly: "Ke fumane tse latelang..." and list the details including their location and price.
-          3. If no matches, suggest alternative districts or types.
-          4. If the user is just saying hello, explain your role: "Nka u thusa ho fumana mobu kapa lisebelisoa."
-          5. Speak in Sesotho sa Lesotho.
+          2. If the user's request is vague (e.g., "I need land"), ASK CLARIFYING QUESTIONS first. Ask about "setereke (district)", "mofuta oa mobu (land type)", or "budget".
+          3. If you find matches, recommend them clearly: "Ke fumane tse latelang..." and list the details including their location and price.
+          4. If no matches, suggest alternative districts or types.
+          5. If the user is just saying hello, explain your role: "Nka u thusa ho fumana mobu kapa lisebelisoa."
+          6. Speak in Sesotho sa Lesotho.
         `;
     } else {
         // --- NEGOTIATION MEDIATION MODE ---
@@ -376,30 +379,6 @@ export const generateListingFromImage = async (base64Image: string, category: 'L
     }
 }
 
-// --- Financial Analysis ---
-
-export const analyzeCashBook = async (entries: CashBookEntry[]): Promise<string> => {
-    try {
-        const ai = getAiClient();
-        const prompt = `
-            Analyze these financial records for a Basotho farmer:
-            ${JSON.stringify(entries)}
-            
-            Identify 1 key area where they are spending too much.
-            Suggest 1 cost-saving measure based on Conservation Agriculture (CAWT) or Agroforestry (e.g. using nitrogen-fixing trees instead of fertilizer).
-            Respond in Sesotho sa Lesotho. Keep it short and encouraging.
-        `;
-        
-        const response = await ai.models.generateContent({
-             model: "gemini-2.5-flash",
-             contents: prompt
-        });
-        return response.text || "Ntlafatsa litlaleho tsa hau ho fumana likeletso.";
-    } catch (e) {
-        return "Tšoarelo, re sitiloe ho hlahloba libuka hajoale.";
-    }
-}
-
 // --- Dispute Advice Generation ---
 
 export const generateDisputeAdvice = async (type: string, description: string): Promise<string> => {
@@ -425,6 +404,44 @@ export const generateDisputeAdvice = async (type: string, description: string): 
         return "Tšoarelo, re sitiloe ho fumana likeletso hajoale.";
     }
 }
+
+// FIX: Add missing analyzeCashBook function to resolve error in CashBookView.
+// --- Cash Book Analysis ---
+export const analyzeCashBook = async (entries: CashBookEntry[]): Promise<string> => {
+    try {
+        const ai = getAiClient();
+        
+        // Simplify entries to save tokens
+        const summary = entries.map(e => `${e.date}: ${e.type === 'INCOME' ? '+' : '-'}M${e.amount} (${e.description})`).join('\n');
+
+        const prompt = `
+            You are a financial advisor for a small-scale farmer in Lesotho.
+            Analyze the following cash book entries.
+            
+            Entries:
+            ${summary}
+
+            Task:
+            Provide a short, encouraging, and actionable piece of advice in Sesotho sa Lesotho.
+            Focus on one key area for improvement (e.g., high expenses on fuel, low sales, etc.).
+            Keep the response under 50 words.
+            Example: "Ke hlokometse hore litšenyehelo tsa diesel li phahame. Leka ho kopanya mesebetsi ho boloka mafura."
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                systemInstruction: KONAKI_SYSTEM_INSTRUCTION,
+            }
+        });
+        
+        return response.text || "Ha ke khone ho fana ka keletso hajoale. Leka hape hamorao.";
+    } catch (e) {
+        console.error("CashBook Analysis Error", e);
+        return "Tšoarelo, ho bile le phoso ha ke ntse ke hlahloba buka ea hau. Re ka leka hape?";
+    }
+};
 
 
 // --- Voice Features ---

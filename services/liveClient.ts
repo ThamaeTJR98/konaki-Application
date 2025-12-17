@@ -34,7 +34,7 @@ export class LiveClient {
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     
-    this.session = await this.ai.live.connect({
+    const sessionPromise = this.ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       config: {
         systemInstruction: KONAKI_SYSTEM_INSTRUCTION + "\n\nIMPORTANT: You are in VOICE mode. Keep responses extremely short (1-2 sentences). Speak naturally in Sesotho. You have access to Google Search to answer questions about Weather (Boemo ba leholimo) and Market Prices.",
@@ -48,6 +48,7 @@ export class LiveClient {
         onopen: () => {
           console.log("Konaki Live Connected");
           this.isConnected = true;
+          this.session = sessionPromise; // Assign the resolved promise
           this.startInputStream(stream);
         },
         onmessage: (msg: LiveServerMessage) => {
@@ -64,6 +65,7 @@ export class LiveClient {
         }
       }
     });
+    this.session = await sessionPromise;
   }
 
   private startInputStream(stream: MediaStream) {
@@ -159,7 +161,7 @@ export class LiveClient {
     this.isConnected = false;
     
     if (this.session) {
-       // this.session.close(); 
+       this.session.close(); 
        this.session = null;
     }
 

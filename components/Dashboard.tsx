@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { UserRole, Listing, FarmerProfile } from '../types';
+import { UserRole, Listing, FarmerProfile, Language } from '../types';
 import { DISTRICTS } from '../constants';
+import { translations } from '../translations';
 import LandCard from './LandCard';
 import MapComponent from './MapComponent';
 import { generateListingFromImage } from '../services/geminiService';
@@ -14,15 +15,19 @@ interface DashboardProps {
   onAddListing: (listing: Listing) => void;
   onOpenAdvisor?: () => void;
   onStartLiveCall?: () => void;
-  onStartMatching?: (profile: FarmerProfile) => void; // Updated to require profile
+  onStartMatching?: (profile: FarmerProfile) => void;
+  language: Language;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onOpenAdvisor, onStartLiveCall, onStartMatching }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, onAddListing, onOpenAdvisor, onStartLiveCall, onStartMatching, language }) => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Bohle');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMyListingsOnly, setShowMyListingsOnly] = useState(false);
   
+  const t = (key: string) => translations[key]?.[language] || key;
+
   // Profile State
   const [profileCrops, setProfileCrops] = useState('');
   const [profileBudget, setProfileBudget] = useState('');
@@ -44,7 +49,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // Filter Logic Updated
   const filteredListings = listings.filter(l => {
+      // 1. Filter by ownership if toggle is on
+      if (showMyListingsOnly) {
+          return l.holderName.includes("Uena");
+      }
+      // 2. Filter by District
       const matchDistrict = selectedDistrict === 'Bohle' || l.district === selectedDistrict;
       return matchDistrict;
   });
@@ -129,6 +140,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
     setNewFeatures([]);
     setPreviewImage(null);
     setIsFormCVerified(false);
+    
+    // Auto-switch to "My Listings" view so user sees what they added
+    if (canAddListing) {
+        setShowMyListingsOnly(true);
+    }
   };
   
   const handleStartProfile = () => {
@@ -151,17 +167,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
 
   const getWelcomeTitle = () => {
       switch(role) {
-          case UserRole.FARMER: return "Fumana Mobu & Lisebelisoa";
-          case UserRole.PROVIDER: return "Laola Lisebelisoa Tsa Hau";
-          default: return "Laola Mobu oa Hau";
+          case UserRole.FARMER: return t("find_assets");
+          case UserRole.PROVIDER: return t("manage_equipment");
+          default: return t("manage_land");
       }
   };
 
   const getWelcomeDesc = () => {
       switch(role) {
-          case UserRole.FARMER: return "Batla mobu kapa lisebelisoa tsa temo.";
-          case UserRole.PROVIDER: return "Kenya lisebelisoa tsa hau hore lihoai li li hire.";
-          default: return "Kenya mobu oa hau hore o fumane bahirisi.";
+          case UserRole.FARMER: return language === 'st' ? "Batla mobu kapa lisebelisoa tsa temo." : "Find land or farming equipment.";
+          case UserRole.PROVIDER: return language === 'st' ? "Kenya lisebelisoa tsa hau hore lihoai li li hire." : "List your equipment for farmers to rent.";
+          default: return language === 'st' ? "Kenya mobu oa hau hore o fumane bahirisi." : "List your land to find tenants.";
       }
   };
 
@@ -176,44 +192,67 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                 <h2 className="text-2xl font-bold text-stone-800">{getWelcomeTitle()}</h2>
                 <p className="text-stone-500 text-sm">{getWelcomeDesc()}</p>
             </div>
-            <div className="flex bg-stone-100 p-1 rounded-lg shrink-0">
-                <button 
-                    onClick={() => setViewMode('list')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-green-700' : 'text-stone-500 hover:text-stone-700'}`}
-                >
-                    Lenane
-                </button>
-                <button 
-                    onClick={() => setViewMode('map')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'map' ? 'bg-white shadow text-green-700' : 'text-stone-500 hover:text-stone-700'}`}
-                >
-                    'Mapa
-                </button>
+            
+            <div className="flex gap-2 shrink-0">
+                {/* My Listings Toggle for Owners */}
+                {canAddListing && (
+                    <div className="flex bg-stone-100 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setShowMyListingsOnly(false)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all ${!showMyListingsOnly ? 'bg-white shadow text-stone-800' : 'text-stone-400 hover:text-stone-600'}`}
+                        >
+                            {t('all')}
+                        </button>
+                        <button 
+                            onClick={() => setShowMyListingsOnly(true)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase transition-all ${showMyListingsOnly ? 'bg-white shadow text-green-700' : 'text-stone-400 hover:text-stone-600'}`}
+                        >
+                            {t('mine')}
+                        </button>
+                    </div>
+                )}
+
+                <div className="flex bg-stone-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setViewMode('list')}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-green-700' : 'text-stone-500 hover:text-stone-700'}`}
+                    >
+                        {t('list')}
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('map')}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'map' ? 'bg-white shadow text-green-700' : 'text-stone-500 hover:text-stone-700'}`}
+                    >
+                        {t('map')}
+                    </button>
+                </div>
             </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-            <button 
-                onClick={() => setSelectedDistrict('Bohle')}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedDistrict === 'Bohle' ? 'bg-green-700 text-white shadow-md' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                }`}
-            >
-                Litereke Tsohle
-            </button>
-            {DISTRICTS.map(d => (
+        {/* Filters - Hide District Filter if viewing "My Listings" only */}
+        {!showMyListingsOnly && (
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                 <button 
-                key={d}
-                onClick={() => setSelectedDistrict(d)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedDistrict === d ? 'bg-green-700 text-white shadow-md' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                }`}
-            >
-                {d}
-            </button>
-            ))}
-        </div>
+                    onClick={() => setSelectedDistrict('Bohle')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                        selectedDistrict === 'Bohle' ? 'bg-green-700 text-white shadow-md' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                >
+                    {t('all_districts')}
+                </button>
+                {DISTRICTS.map(d => (
+                    <button 
+                    key={d}
+                    onClick={() => setSelectedDistrict(d)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                        selectedDistrict === d ? 'bg-green-700 text-white shadow-md' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                >
+                    {d}
+                </button>
+                ))}
+            </div>
+        )}
       </div>
 
       {/* Content Area */}
@@ -231,7 +270,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                 ) : (
                     <div className="col-span-full flex flex-col items-center justify-center py-20 text-stone-400">
                         <span className="text-4xl mb-2">🚜</span>
-                        <p>Ha ho letho le fumanehang seterekeng sena hajoale.</p>
+                        {showMyListingsOnly ? (
+                            <p>Ha u so kenye letho. Tobetsa "+" ho qala.</p>
+                        ) : (
+                            <p>Ha ho letho le fumanehang seterekeng sena hajoale.</p>
+                        )}
                     </div>
                 )}
             </div>
@@ -267,7 +310,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                     className="bg-white text-green-800 p-4 rounded-full shadow-lg border border-green-200 hover:scale-105 transition-all flex items-center justify-center w-14 h-14"
                     title="Botsa Konaki Advisor (Chat)"
                   >
-                     <div className="w-8 h-8">
+                     <div className="w-8 h-8 text-green-900">
                          <Logo isSpeaking={true} />
                      </div>
                   </button>
@@ -301,7 +344,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
                 <h3 className="text-xl font-bold text-stone-800 mb-4">
-                    {role === UserRole.PROVIDER ? 'Kenya Lisebelisoa (Add Equipment)' : 'Kenya Mobu (Add Land)'}
+                    {role === UserRole.PROVIDER ? (language === 'st' ? 'Kenya Lisebelisoa' : 'Add Equipment') : (language === 'st' ? 'Kenya Mobu' : 'Add Land')}
                 </h3>
                 
                 <form onSubmit={handleCreateListing} className="space-y-4">
@@ -459,7 +502,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, listings, onSelectListing, 
                             type="submit" 
                             className="flex-1 py-2 bg-green-700 text-white rounded-lg font-bold hover:bg-green-800"
                         >
-                            Kenya
+                            {t('add_listing')}
                         </button>
                     </div>
                 </form>

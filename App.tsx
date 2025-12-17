@@ -1,16 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, CashBookEntry, FarmerProfile } from './types';
+import { UserRole, ViewState, ChatMessage, LandListing, Agreement, Dispute, FarmerProfile, Language, DiaryEntry } from './types';
 import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
 import { dataStore } from './services/dataStore';
+import { isOnline } from './services/supabaseClient';
+import { translations } from './translations';
 import RoleSelector from './components/RoleSelector';
 import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
 import ListingDetails from './components/ListingDetails';
 import AgreementsView from './components/AgreementsView';
 import DisputesView from './components/DisputesView';
-import CashBookView from './components/CashBookView';
 import MatchingView from './components/MatchingView';
+import MessagesView from './components/MessagesView';
+import DiaryView from './components/DiaryView';
 import LiveVoiceOverlay from './components/LiveVoiceOverlay';
 import Logo from './components/Logo';
 import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS } from './constants';
@@ -21,6 +24,8 @@ const App: React.FC = () => {
   const [viewState, setViewState] = useState<ViewState>(ViewState.ONBOARDING);
   const [activeListing, setActiveListing] = useState<LandListing | null>(null);
   const [isGlobalAdvisorChat, setIsGlobalAdvisorChat] = useState(false); 
+  const [language, setLanguage] = useState<Language>('st'); // Default Sesotho
+  const [appIsOnline, setAppIsOnline] = useState(true);
   
   // Profile State
   const [farmerProfile, setFarmerProfile] = useState<FarmerProfile | null>(null);
@@ -34,11 +39,27 @@ const App: React.FC = () => {
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [isLiveCallActive, setIsLiveCallActive] = useState(false);
   
+  // UI State
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
   // Data State with defaults
   const [listings, setListings] = useState<LandListing[]>([]);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [cashBookEntries, setCashBookEntries] = useState<CashBookEntry[]>([]); 
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+
+  // Helper for Translation
+  const t = (key: string) => translations[key]?.[language] || key;
+
+  // --- Toast Handler ---
+  useEffect(() => {
+    if (toastMessage) {
+        const timer = setTimeout(() => {
+            setToastMessage(null);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // --- Persistence (Load) ---
   useEffect(() => {
@@ -50,19 +71,17 @@ const App: React.FC = () => {
             setViewState(ViewState.DASHBOARD);
         }
 
+        // Load Farmer Profile
+        const savedProfile = dataStore.getFarmerProfile();
+        if (savedProfile) {
+            setFarmerProfile(savedProfile);
+        }
+
         // Load Tables (Try Supabase -> Fallback Local)
-        const l = await dataStore.getListings(MOCK_LISTINGS);
-        setListings(l);
-
-        const a = await dataStore.getAgreements(MOCK_AGREEMENTS);
-        setAgreements(a);
-
-        const d = await dataStore.getDisputes(MOCK_DISPUTES);
-        setDisputes(d);
-
-        // Load Cashbook
-        const c = await dataStore.getCashBook([]);
-        setCashBookEntries(c);
+        setListings(await dataStore.getListings(MOCK_LISTINGS));
+        setAgreements(await dataStore.getAgreements(MOCK_AGREEMENTS));
+        setDisputes(await dataStore.getDisputes(MOCK_DISPUTES));
+        setDiaryEntries(await dataStore.getDiary([]));
 
         // Chat sessions still local
         const savedChatSessions = localStorage.getItem('konaki_chat_sessions');
@@ -70,6 +89,15 @@ const App: React.FC = () => {
     };
 
     loadData();
+    
+    // Check online status periodically
+    const checkOnline = () => setAppIsOnline(navigator.onLine);
+    window.addEventListener('online', checkOnline);
+    window.addEventListener('offline', checkOnline);
+    return () => {
+        window.removeEventListener('online', checkOnline);
+        window.removeEventListener('offline', checkOnline);
+    };
   }, []);
 
   // --- Handlers ---
@@ -93,6 +121,22 @@ const App: React.FC = () => {
     setMessages(sessionMessages);
     setCurrentSuggestions([]);
     setViewState(ViewState.CHAT);
+  };
+  
+  // Open chat from Inbox
+  const handleOpenChatFromInbox = (listingId: string) => {
+      if (listingId === 'konaki_advisor_global') {
+          handleOpenAdvisor();
+      } else {
+          const listing = listings.find(l => l.id === listingId);
+          if (listing) {
+              setActiveListing(listing);
+              setIsGlobalAdvisorChat(false);
+              const msgs = chatSessions[listingId] || [];
+              setMessages(msgs);
+              setViewState(ViewState.CHAT);
+          }
+      }
   };
 
   const handleStartNegotiation = () => {
@@ -142,6 +186,7 @@ const App: React.FC = () => {
 
   const handleStartMatching = (profile: FarmerProfile) => {
       setFarmerProfile(profile);
+      dataStore.setFarmerProfile(profile); // Persist
       setViewState(ViewState.MATCHING);
   };
 
@@ -154,10 +199,11 @@ const App: React.FC = () => {
       const sessionMessages = chatSessions[listing.id] || [];
       setMessages(sessionMessages);
       
-      // If new chat, auto send a "Hello" or "Match" message
+      // If new chat, auto send a contextual "Hello" message
       if (sessionMessages.length === 0) {
           setTimeout(() => {
-             handleSendMessage("Lumela! Ke bone 'match' ea rona ho Konaki. Ke kopa ho bua ka monyetla ona. (Hello! I saw our match via Konaki.)");
+             const greeting = `Lumela! Ke bone 'match' ea rona ho Konaki bakeng sa ${listing.type} e ${listing.district}. Ke kopa ho bua ka monyetla ona.`;
+             handleSendMessage(greeting);
           }, 500);
       }
   };
@@ -185,16 +231,32 @@ const App: React.FC = () => {
     setDisputes(updated);
     await dataStore.saveDisputes(updated);
   };
-
-  const handleUpdateCashBook = async (updatedEntries: CashBookEntry[]) => {
-      setCashBookEntries(updatedEntries);
-      await dataStore.saveCashBook(updatedEntries);
-  }
+  
+  const handleAddDiaryEntry = async (newEntry: DiaryEntry) => {
+    const updated = [newEntry, ...diaryEntries];
+    setDiaryEntries(updated);
+    await dataStore.saveDiary(updated);
+  };
 
   const handleUpdateAgreement = async (updatedAgreement: Agreement) => {
+      const oldAgreement = agreements.find(a => a.id === updatedAgreement.id);
       const updated = agreements.map(a => a.id === updatedAgreement.id ? updatedAgreement : a);
       setAgreements(updated);
       await dataStore.saveAgreements(updated);
+
+      // --- AUTOMATION HOOK: AGREEMENT SIGNED ---
+      if (oldAgreement?.status !== 'Signed' && updatedAgreement.status === 'Signed') {
+          const diaryEntry: DiaryEntry = {
+              id: `diary_${Date.now()}`,
+              date: new Date().toISOString().split('T')[0],
+              type: 'AGREEMENT_SIGNED',
+              title: `Tumellano e saennoe: ${updatedAgreement.title}`,
+              description: `Mahlakore: Uena le ${updatedAgreement.parties.landholder}`,
+              icon: '✍️',
+              relatedId: updatedAgreement.id
+          };
+          handleAddDiaryEntry(diaryEntry);
+      }
   }
 
   const updateChatSession = (id: string, newMessages: ChatMessage[]) => {
@@ -277,16 +339,12 @@ const App: React.FC = () => {
       await dataStore.saveAgreements(updated);
       setIsAiLoading(false);
       setViewState(ViewState.AGREEMENTS);
-      alert("Tumellano e entsoe! (Agreement generated!)");
+      setToastMessage("Tumellano e entsoe! (Agreement generated!)");
   };
 
   const goBack = () => {
     if (viewState === ViewState.CHAT) {
-        if(isGlobalAdvisorChat) {
-            setViewState(ViewState.DASHBOARD);
-        } else {
-            setViewState(ViewState.LISTING_DETAILS);
-        }
+        setViewState(ViewState.MESSAGES);
     } else if (viewState === ViewState.LISTING_DETAILS) {
         setActiveListing(null);
         setViewState(ViewState.DASHBOARD);
@@ -300,7 +358,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setTimeout(() => {
-        if (window.confirm("U batla ho tsoa? (Log out?)")) {
+        if (window.confirm(t('logout') + "?")) {
             setRole(UserRole.NONE);
             dataStore.setRole(UserRole.NONE);
             setViewState(ViewState.ONBOARDING);
@@ -311,8 +369,8 @@ const App: React.FC = () => {
     }, 50);
   };
 
-  const NavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
-    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS || viewState === ViewState.MATCHING));
+  const NavButton = ({ targetView, icon, labelKey }: { targetView: ViewState, icon: string, labelKey: string }) => {
+    const isActive = viewState === targetView;
     return (
       <button 
         onClick={() => {
@@ -326,13 +384,13 @@ const App: React.FC = () => {
             : 'text-green-100 hover:bg-white/5 hover:text-white'
         }`}
       >
-        <span className="text-xl">{icon}</span> {label}
+        <span className="text-xl">{icon}</span> {t(labelKey)}
       </button>
     );
   };
 
-  const MobileNavButton = ({ targetView, icon, label }: { targetView: ViewState, icon: string, label: string }) => {
-    const isActive = viewState === targetView || (targetView === ViewState.DASHBOARD && (viewState === ViewState.CHAT || viewState === ViewState.LISTING_DETAILS || viewState === ViewState.MATCHING));
+  const MobileNavButton = ({ targetView, icon, labelKey }: { targetView: ViewState, icon: string, labelKey: string }) => {
+    const isActive = viewState === targetView;
     return (
         <button 
             onClick={() => {
@@ -347,7 +405,7 @@ const App: React.FC = () => {
             }`}
         >
             <span className={`text-2xl ${isActive ? 'scale-110' : ''} transition-transform`}>{icon}</span>
-            <span className="text-[10px] font-bold tracking-wide">{label}</span>
+            <span className="text-[10px] font-bold tracking-wide">{t(labelKey)}</span>
         </button>
     );
   };
@@ -362,31 +420,27 @@ const App: React.FC = () => {
   }
 
   let MainContent;
-  if (viewState === ViewState.DASHBOARD) {
-      MainContent = <Dashboard 
-        role={role} 
-        listings={listings}
-        onSelectListing={handleListingSelect} 
-        onAddListing={handleAddListing}
-        onOpenAdvisor={handleOpenAdvisor}
-        onStartLiveCall={() => setIsLiveCallActive(true)}
-        onStartMatching={handleStartMatching}
-      />;
-  } else if (viewState === ViewState.LISTING_DETAILS && activeListing) {
-      MainContent = <ListingDetails 
-        listing={activeListing} 
-        onStartChat={handleStartChat}
-        onStartNegotiation={handleStartNegotiation}
-        onBack={handleBackToDashboard}
-      />;
-  } else if (viewState === ViewState.AGREEMENTS) {
-      MainContent = <AgreementsView agreements={agreements} onUpdateAgreement={handleUpdateAgreement} />;
-  } else if (viewState === ViewState.DISPUTES) {
-      MainContent = <DisputesView disputes={disputes} onAddDispute={handleAddDispute} />;
-  } else if (viewState === ViewState.CASHBOOK) {
-      MainContent = <CashBookView initialEntries={cashBookEntries} onUpdate={handleUpdateCashBook} />;
-  } else {
-      MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} />; 
+  switch (viewState) {
+      case ViewState.DASHBOARD:
+          MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} language={language} />;
+          break;
+      case ViewState.LISTING_DETAILS:
+          if (activeListing) MainContent = <ListingDetails listing={activeListing} onStartChat={handleStartChat} onStartNegotiation={handleStartNegotiation} onBack={handleBackToDashboard} />;
+          break;
+      case ViewState.AGREEMENTS:
+          MainContent = <AgreementsView agreements={agreements} onUpdateAgreement={handleUpdateAgreement} />;
+          break;
+      case ViewState.DISPUTES:
+          MainContent = <DisputesView disputes={disputes} onAddDispute={handleAddDispute} />;
+          break;
+      case ViewState.MESSAGES:
+          MainContent = <MessagesView chatSessions={chatSessions} listings={listings} onOpenChat={handleOpenChatFromInbox} language={language} />;
+          break;
+      case ViewState.DIARY:
+          MainContent = <DiaryView entries={diaryEntries} onAddEntry={handleAddDiaryEntry} />;
+          break;
+      default:
+          MainContent = <Dashboard role={role} listings={listings} onSelectListing={handleListingSelect} onAddListing={handleAddListing} onOpenAdvisor={handleOpenAdvisor} onStartLiveCall={() => setIsLiveCallActive(true)} onStartMatching={handleStartMatching} language={language} />;
   }
 
   const isDesktopChatVisible = window.innerWidth >= 768 && viewState === ViewState.CHAT;
@@ -398,29 +452,57 @@ const App: React.FC = () => {
   return (
     <div className="fixed inset-0 w-full h-full bg-stone-50 flex flex-col md:flex-row overflow-hidden font-sans">
       
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="absolute top-5 right-5 bg-green-800 text-white px-6 py-3 rounded-lg shadow-2xl z-[9999] animate-fade-in-up flex items-center gap-3">
+            <span>✅</span>
+            <span className="font-bold text-sm">{toastMessage}</span>
+        </div>
+      )}
+
       {/* Live Voice Overlay */}
       {isLiveCallActive && <LiveVoiceOverlay onClose={() => setIsLiveCallActive(false)} />}
       
       {/* Sidebar (Desktop) */}
       <div className="hidden md:flex w-72 bg-green-900 text-white flex-col justify-between p-6 shadow-2xl z-30 shrink-0 no-print">
         <div>
-            <div className="mb-10 flex items-center gap-3 px-2">
-                <div className="w-12 h-12 bg-white rounded-full p-1.5 flex items-center justify-center overflow-hidden shadow-lg">
+            <div className="mb-8 flex items-center gap-3 px-2">
+                <div className="w-12 h-12 bg-white rounded-full p-1.5 flex items-center justify-center overflow-hidden shadow-lg text-green-900">
                     <Logo />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold tracking-tight">KONAKI AI</h1>
-                    <p className="text-xs text-green-300 font-medium">Partnerships</p>
+                    {/* Offline Indicator */}
+                    {!appIsOnline && (
+                        <p className="text-[10px] bg-red-500/20 text-red-200 px-2 py-0.5 rounded-full inline-block border border-red-500/50">Offline Mode</p>
+                    )}
                 </div>
             </div>
             
-            <nav className="space-y-1">
-                <NavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
-                <NavButton targetView={ViewState.MATCHING} icon="🔥" label="Smart Match" />
-                <NavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Litumellano" />
-                <NavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka ea Lichelete" />
-                <NavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Likhohlano" />
+            <nav className="space-y-1 mb-8">
+                <NavButton targetView={ViewState.DASHBOARD} icon="🏠" labelKey="home" />
+                <NavButton targetView={ViewState.MESSAGES} icon="💬" labelKey="messages" />
+                <NavButton targetView={ViewState.MATCHING} icon="🔥" labelKey="match" />
+                <NavButton targetView={ViewState.DIARY} icon="📖" labelKey="diary" />
+                <NavButton targetView={ViewState.AGREEMENTS} icon="📄" labelKey="agreements" />
+                <NavButton targetView={ViewState.DISPUTES} icon="⚖️" labelKey="disputes" />
             </nav>
+
+            {/* Language Toggle */}
+            <div className="bg-green-800/50 p-1 rounded-lg flex mb-4">
+                <button 
+                    onClick={() => setLanguage('st')}
+                    className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${language === 'st' ? 'bg-white text-green-900 shadow' : 'text-green-300 hover:text-white'}`}
+                >
+                    Sesotho
+                </button>
+                <button 
+                    onClick={() => setLanguage('en')}
+                    className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${language === 'en' ? 'bg-white text-green-900 shadow' : 'text-green-300 hover:text-white'}`}
+                >
+                    English
+                </button>
+            </div>
         </div>
         
         <div className="border-t border-green-800/50 pt-6">
@@ -430,14 +512,14 @@ const App: React.FC = () => {
                 </div>
                 <div className="overflow-hidden">
                     <p className="font-bold text-sm truncate text-green-50">Mosebelisi</p>
-                    <p className="text-xs text-green-300 truncate font-medium">{role}</p>
+                    <p className="text-xs text-green-300 truncate font-medium">{t(role === UserRole.FARMER ? 'farmer' : role === UserRole.PROVIDER ? 'provider' : 'landholder')}</p>
                 </div>
              </div>
              <button 
                 onClick={handleLogout} 
                 className="text-xs text-green-400 hover:text-white flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-green-800/50 transition-colors"
              >
-                <span>🚪</span> Tsoa (Log out)
+                <span>🚪</span> {t('logout')}
              </button>
         </div>
       </div>
@@ -453,7 +535,7 @@ const App: React.FC = () => {
                             ←
                         </button>
                         
-                        <div className="w-8 h-8 mr-2 bg-white rounded-full p-1 shadow-sm shrink-0 flex items-center justify-center">
+                        <div className="w-8 h-8 mr-2 bg-white rounded-full p-1 shadow-sm shrink-0 flex items-center justify-center text-green-900">
                             <Logo />
                         </div>
 
@@ -467,27 +549,36 @@ const App: React.FC = () => {
                                 </p>
                             </div>
                         ) : (
-                            <span className="font-bold">Lintlha (Details)</span>
+                            <span className="font-bold">{t('details')}</span>
                         )}
                     </div>
                  </>
              ) : (
                  <>
                     <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 bg-white rounded-full p-1.5 overflow-hidden flex items-center justify-center shadow-sm">
+                        <div className="w-9 h-9 bg-white rounded-full p-1.5 overflow-hidden flex items-center justify-center shadow-sm text-green-900">
                             <Logo />
                         </div>
                         <span className="font-bold text-lg tracking-wide">KONAKI AI</span>
                     </div>
-                    {/* Logout Button */}
-                    <button 
-                        type="button"
-                        onClick={handleLogout}
-                        className="w-10 h-10 bg-green-800 rounded-full flex items-center justify-center text-base border border-green-700 shadow-sm active:bg-green-700 transition-colors cursor-pointer hover:bg-green-700 z-50 pointer-events-auto"
-                        title="Tsoa (Log out)"
-                    >
-                        {role === UserRole.FARMER ? '👨🏽‍🌾' : role === UserRole.PROVIDER ? '🚜' : '🏡'}
-                    </button>
+                    
+                    <div className="flex items-center gap-3">
+                        {/* Mobile Lang Toggle */}
+                        <button 
+                            onClick={() => setLanguage(l => l === 'st' ? 'en' : 'st')}
+                            className="text-xs font-bold bg-green-800 px-2 py-1 rounded border border-green-700 uppercase"
+                        >
+                            {language}
+                        </button>
+
+                        <button 
+                            type="button"
+                            onClick={handleLogout}
+                            className="w-8 h-8 bg-green-800 rounded-full flex items-center justify-center text-sm border border-green-700"
+                        >
+                            {role === UserRole.FARMER ? '👨🏽‍🌾' : role === UserRole.PROVIDER ? '🚜' : '🏡'}
+                        </button>
+                    </div>
                  </>
              )}
         </div>
@@ -538,11 +629,11 @@ const App: React.FC = () => {
 
         {!isMobileChatActive && viewState !== ViewState.LISTING_DETAILS && viewState !== ViewState.MATCHING && (
             <div className="md:hidden bg-white border-t border-stone-200 flex justify-around items-center h-16 shrink-0 pb-safe z-30 shadow-[0_-8px_20px_-10px_rgba(0,0,0,0.1)] no-print">
-                <MobileNavButton targetView={ViewState.DASHBOARD} icon="🏠" label="Lehae" />
-                <MobileNavButton targetView={ViewState.MATCHING} icon="🔥" label="Match" />
-                <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" label="Tume" />
-                <MobileNavButton targetView={ViewState.CASHBOOK} icon="💰" label="Buka" />
-                <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" label="Thata" />
+                <MobileNavButton targetView={ViewState.DASHBOARD} icon="🏠" labelKey="home" />
+                <MobileNavButton targetView={ViewState.MESSAGES} icon="💬" labelKey="messages" />
+                <MobileNavButton targetView={ViewState.DIARY} icon="📖" labelKey="diary" />
+                <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" labelKey="agreements" />
+                <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" labelKey="disputes" />
             </div>
         )}
 

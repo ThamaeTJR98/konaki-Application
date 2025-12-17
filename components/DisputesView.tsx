@@ -43,39 +43,58 @@ const DisputesView: React.FC<DisputesViewProps> = ({ disputes, onAddDispute }) =
   };
 
   const handlePrintReport = (dispute: Dispute) => {
-      // Mocking the print functionality for the Chief
-      const printWindow = window.open('', '', 'width=600,height=800');
+      // This function generates a formal report for the user to take to their local chief/authority.
+      const printWindow = window.open('', '', 'width=800,height=600');
       if (printWindow) {
           printWindow.document.write(`
             <html>
                 <head>
-                    <title>Tlaleho ea Khohlano - Morena</title>
+                    <title>Tlaleho ea Khohlano - ${dispute.id}</title>
                     <style>
-                        body { font-family: serif; padding: 40px; }
-                        h1 { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; }
-                        .header { margin-bottom: 30px; }
-                        .content { line-height: 1.6; }
-                        .footer { margin-top: 50px; text-align: center; }
+                        body { font-family: 'Lora', serif; padding: 40px; color: #333; }
+                        h1 { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 10px; font-size: 24px; }
+                        .subtitle { text-align: center; font-size: 14px; color: #666; margin-bottom: 30px; }
+                        .section { margin-bottom: 25px; }
+                        .section h2 { font-size: 16px; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;}
+                        p { line-height: 1.6; margin: 0 0 10px 0;}
+                        strong { color: #000; }
+                        .advice { background-color: #f3f4f6; border-left: 4px solid #4ade80; padding: 15px; margin-top: 10px; }
+                        .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 12px; color: #666; }
+                        .signature { margin-top: 40px; }
                     </style>
                 </head>
                 <body>
-                    <h1>TLALEHO EA KHOHLANO EA MOBU</h1>
-                    <div class="header">
-                        <p><strong>Ho:</strong> Morena oa Sebaka / Local Council</p>
-                        <p><strong>Letsatsi:</strong> ${new Date().toLocaleDateString()}</p>
-                    </div>
-                    <div class="content">
+                    <h1>TLALEHO EA KHOHLANO</h1>
+                    <div class="subtitle">E lokiselitsoe Morena oa Sebaka / Lekhotla la Puso</div>
+                    
+                    <div class="section">
+                        <h2>Lintlha tsa Taba</h2>
+                        <p><strong>Letsatsi la Tlaleho:</strong> ${new Date(dispute.dateReported).toDateString()}</p>
                         <p><strong>Mofuta oa Taba:</strong> ${dispute.type}</p>
                         <p><strong>Sehlooho:</strong> ${dispute.title}</p>
-                        <p><strong>Tlhaloso:</strong></p>
-                        <p>${dispute.description}</p>
-                        <hr/>
-                        <p><strong>Keletso ea Molao (Konaki AI):</strong></p>
-                        <p><em>${dispute.aiAdvice}</em></p>
                     </div>
-                    <div class="footer">
+
+                    <div class="section">
+                        <h2>Tlhaloso ea Bothata</h2>
+                        <p>${dispute.description.replace(/\n/g, '<br>')}</p>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>Keletso ea Konaki AI (e ipapisitse le molao)</h2>
+                        <div class="advice">
+                            <p><em>${dispute.aiAdvice}</em></p>
+                        </div>
+                    </div>
+
+                    <div class="signature">
+                        <p>Boitsebiso bona bo fanoe ke 'na,</p>
+                        <br/><br/>
                         <p>__________________________</p>
-                        <p>Moinwane (Signature)</p>
+                        <p>Moinahani (Signature)</p>
+                    </div>
+
+                    <div class="footer">
+                        Tlaleho ena e entsoe ke KONAKI AI ho thusa ka tharollo ea likhohlano tsa temo Lesotho.
                     </div>
                 </body>
             </html>

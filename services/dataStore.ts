@@ -1,13 +1,14 @@
 
 import { getSupabase, isOnline } from './supabaseClient';
-import { Listing, Agreement, Dispute, CashBookEntry, UserRole } from '../types';
+import { Listing, Agreement, Dispute, UserRole, FarmerProfile, DiaryEntry } from '../types';
 
 // --- KEYS ---
 const KEY_LISTINGS = 'konaki_listings';
 const KEY_AGREEMENTS = 'konaki_agreements';
 const KEY_DISPUTES = 'konaki_disputes';
-const KEY_CASHBOOK = 'konaki_cashbook';
+const KEY_DIARY = 'konaki_diary';
 const KEY_ROLE = 'konaki_role';
+const KEY_PROFILE = 'konaki_farmer_profile';
 
 // --- HELPER: GENERIC FETCH ---
 async function fetchData<T>(table: string, localKey: string, defaultData: T[]): Promise<T[]> {
@@ -66,6 +67,15 @@ export const dataStore = {
         localStorage.setItem(KEY_ROLE, role);
     },
 
+    // Farmer Profile
+    getFarmerProfile: (): FarmerProfile | null => {
+        const p = localStorage.getItem(KEY_PROFILE);
+        return p ? JSON.parse(p) : null;
+    },
+    setFarmerProfile: (profile: FarmerProfile) => {
+        localStorage.setItem(KEY_PROFILE, JSON.stringify(profile));
+    },
+
     // Listings
     getListings: async (defaults: Listing[]) => fetchData('listings', KEY_LISTINGS, defaults),
     saveListings: async (items: Listing[]) => saveData('listings', KEY_LISTINGS, items),
@@ -78,7 +88,7 @@ export const dataStore = {
     getDisputes: async (defaults: Dispute[]) => fetchData('disputes', KEY_DISPUTES, defaults),
     saveDisputes: async (items: Dispute[]) => saveData('disputes', KEY_DISPUTES, items),
 
-    // Cashbook (Currently local only in component, moving logic here)
-    getCashBook: async (defaults: CashBookEntry[]) => fetchData('cashbook', KEY_CASHBOOK, defaults),
-    saveCashBook: async (items: CashBookEntry[]) => saveData('cashbook', KEY_CASHBOOK, items),
+    // Diary
+    getDiary: async (defaults: DiaryEntry[]) => fetchData('diary', KEY_DIARY, defaults),
+    saveDiary: async (items: DiaryEntry[]) => saveData('diary', KEY_DIARY, items),
 };

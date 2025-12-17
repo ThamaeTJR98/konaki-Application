@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { CashBookEntry } from '../types';
+import { CashBookEntry, DiaryEntry } from '../types';
 import { analyzeCashBook } from '../services/geminiService';
 import Logo from './Logo';
+import CashBookReport from './CashBookReport';
 
 interface CashBookViewProps {
     initialEntries: CashBookEntry[];
     onUpdate: (entries: CashBookEntry[]) => void;
+    onAddDiaryEntry: (entry: DiaryEntry) => void; // For automation
 }
 
-const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate }) => {
+const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate, onAddDiaryEntry }) => {
   const [entries, setEntries] = useState<CashBookEntry[]>(initialEntries);
 
   // Sync when prop changes (loading from DB)
@@ -21,6 +23,7 @@ const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate })
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState<'INCOME' | 'EXPENSE'>('INCOME');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   
   // AI State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -34,7 +37,7 @@ const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate })
       e.preventDefault();
       if (!newDesc || !newAmount) return;
 
-      const entry: CashBookEntry = {
+      const newEntry: CashBookEntry = {
           id: Date.now().toString(),
           date: new Date().toISOString().split('T')[0],
           description: newDesc,
@@ -43,9 +46,25 @@ const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate })
           category: 'General'
       };
 
-      const updated = [entry, ...entries];
+      const updated = [newEntry, ...entries];
       setEntries(updated);
       onUpdate(updated);
+
+      // --- AUTOMATION HOOK ---
+      // If it's an expense and seems like an input purchase, add to diary
+      const inputKeywords = ['seed', 'peo', 'fertilizer', 'manyolo', 'diesel', 'fuel', 'chemical', 'meriana'];
+      if (newEntry.type === 'EXPENSE' && inputKeywords.some(k => newDesc.toLowerCase().includes(k))) {
+          const diaryEntry: DiaryEntry = {
+              id: `diary_${Date.now()}`,
+              date: newEntry.date,
+              type: 'INPUT_PURCHASE',
+              title: `O rekile: ${newEntry.description}`,
+              description: `Chelete: M${newEntry.amount.toLocaleString()}`,
+              icon: '🛒',
+              relatedId: newEntry.id
+          };
+          onAddDiaryEntry(diaryEntry);
+      }
 
       setNewDesc('');
       setNewAmount('');
@@ -64,6 +83,10 @@ const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate })
       setIsAnalyzing(false);
   };
 
+  if (showReport) {
+      return <CashBookReport entries={entries} onClose={() => setShowReport(false)} />;
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-stone-50 p-4 sm:p-6 pb-24">
        <div className="mb-6 max-w-4xl mx-auto flex justify-between items-start">
@@ -71,18 +94,26 @@ const CashBookView: React.FC<CashBookViewProps> = ({ initialEntries, onUpdate })
             <h2 className="text-2xl font-bold text-stone-900">Buka ea Lichelete (Cash Book)</h2>
             <p className="text-stone-500 text-sm">Boloka litlaleho tsa khoebo ea hau. (Keep records to track profit).</p>
         </div>
-        <button 
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="bg-amber-100 text-amber-800 border border-amber-200 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-200 transition-colors flex items-center gap-2"
-        >
-            {isAnalyzing ? (
-                 <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></span>
-            ) : (
-                 <div className="w-5 h-5"><Logo isSpeaking={false} /></div>
-            )}
-            Hlahloba (Analyze)
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={handleAnalyze}
+                disabled={isAnalyzing}
+                className="bg-amber-100 text-amber-800 border border-amber-200 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-200 transition-colors flex items-center gap-2"
+            >
+                {isAnalyzing ? (
+                     <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                     <div className="w-5 h-5"><Logo isSpeaking={false} /></div>
+                )}
+                Hlahloba (Analyze)
+            </button>
+            <button 
+                onClick={() => setShowReport(true)}
+                className="bg-stone-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-700 transition-colors flex items-center gap-2"
+            >
+                <span>📄</span> Generate Report
+            </button>
+        </div>
       </div>
 
       {/* AI Analysis Result */}

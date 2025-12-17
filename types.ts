@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   FARMER = 'SEHOAI',
   LANDHOLDER = 'MONGA_MOBU',
@@ -51,7 +52,7 @@ export interface Agreement {
       tenant: string; // or Client
       landholder: string; // or Provider
   };
-  status: 'Draft' | 'Active' | 'Signed' | 'Expired';
+  status: 'Draft' | 'Active' | 'Signed' | 'Expired' | 'Retracted';
   dateCreated: string;
   title: string;
   clauses: {
@@ -95,13 +96,27 @@ export interface Dispute {
   aiAdvice?: string; 
 }
 
+export type DiaryEntryType = 'AGREEMENT_SIGNED' | 'PLANTING' | 'INPUT_PURCHASE' | 'HARVEST' | 'SALE' | 'OBSERVATION';
+
+export interface DiaryEntry {
+  id: string;
+  date: string;
+  type: DiaryEntryType;
+  title: string;
+  description?: string;
+  relatedId?: string; // e.g., agreement.id
+  icon: string; // Emoji
+  photoUrl?: string; // Base64 image
+}
+
+// FIX: Add missing CashBookEntry type to resolve errors.
 export interface CashBookEntry {
   id: string;
   date: string;
-  description: string; // "Thekiso ea Tamati"
+  description: string;
   amount: number;
-  type: 'INCOME' | 'EXPENSE'; // Chelete e keneng vs e tsoileng
-  category?: string; // "Peo", "Manyolo", "Thekiso"
+  type: 'INCOME' | 'EXPENSE';
+  category: string;
 }
 
 export interface GeminiResponse {
@@ -129,6 +144,16 @@ export enum ViewState {
   CHAT,
   AGREEMENTS,
   DISPUTES,
-  CASHBOOK,
-  MATCHING // New View for Tinder-like Matching
+  MATCHING,
+  MESSAGES,
+  DIARY
+}
+
+export type Language = 'st' | 'en';
+
+export interface TranslationDictionary {
+    [key: string]: {
+        st: string;
+        en: string;
+    }
 }
