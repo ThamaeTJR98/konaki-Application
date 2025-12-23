@@ -11,36 +11,30 @@ export interface ChatMessage {
   sender: 'user' | 'counterparty' | 'konaki';
   text: string;
   timestamp: number;
-  isIntervention?: boolean; // If true, this is Konaki stepping in
-  attachment?: string; // Base64 image string
+  isIntervention?: boolean;
+  attachment?: string;
   attachmentType?: 'image';
 }
 
-// Generalized to support both Land and Equipment
 export interface Listing {
   id: string;
   category: 'LAND' | 'EQUIPMENT'; 
   district: string;
   description: string;
-  holderName: string; // Landholder or Equipment Owner
+  holderName: string;
   coordinates?: { lat: number; lng: number };
   imageUrl?: string;
   price?: string; 
-  isVerified?: boolean; // New: Form C Verification Status
-
-  // Land Specifics
-  area?: string; // "3 Hectares"
-  type?: string; // "Masimo", "Serapa"
+  isVerified?: boolean;
+  area?: string;
+  type?: string;
   soilType?: string;
   waterSource?: string;
   features?: string[];
-
-  // Equipment Specifics
-  equipmentType?: string; // "Tractor", "Harvester", "Plough"
-  dailyRate?: string; // "M500 / letsatsi"
+  equipmentType?: string;
+  dailyRate?: string;
 }
 
-// Backward compatibility alias if needed, though we will update usages
 export type LandListing = Listing; 
 
 export interface Agreement {
@@ -48,34 +42,27 @@ export interface Agreement {
   listingId: string;
   listingCategory: 'LAND' | 'EQUIPMENT';
   parties: {
-      tenant: string; // or Client
-      landholder: string; // or Provider
+      tenant: string;
+      landholder: string;
   };
   status: 'Draft' | 'Active' | 'Signed' | 'Expired' | 'Retracted';
   dateCreated: string;
   title: string;
   clauses: {
-      // Shared
-      duration: string; // Length of lease OR Dates of rental
-      paymentTerms: string; // Share split OR Daily Rate
-      termination: string; // Notice period OR Return policy
-      
-      // Land Specific
+      duration: string;
+      paymentTerms: string;
+      termination: string;
       landUse?: string; 
-      
-      // Equipment Specific
-      fuelPolicy?: string; // Who buys diesel?
-      operatorIncluded?: string; // Is the driver included?
-      damageLiability?: string; // Who pays for breakage?
+      fuelPolicy?: string;
+      operatorIncluded?: string;
+      damageLiability?: string;
   };
-  // Digital Signatures
   signatures?: {
-      tenant?: string; // Base64 image data
-      landholder?: string; // Base64 image data
+      tenant?: string;
+      landholder?: string;
   };
 }
 
-// Updated to align with Land Act 2010 classifications
 export enum DisputeType {
   BOUNDARY = "Meeli (Boundary Dispute - Sec 50)",
   DAMAGE = "Lits'enyehelo (Damage to Crops)",
@@ -103,12 +90,11 @@ export interface DiaryEntry {
   type: DiaryEntryType;
   title: string;
   description?: string;
-  relatedId?: string; // e.g., agreement.id
-  icon: string; // Emoji
-  photoUrl?: string; // Base64 image
+  relatedId?: string;
+  icon: string;
+  photoUrl?: string;
 }
 
-// FIX: Add CashBookEntry interface
 export interface CashBookEntry {
   id: string;
   date: string;
@@ -121,19 +107,19 @@ export interface CashBookEntry {
 export interface GeminiResponse {
   counterpartyReply?: string;
   konakiGuidance?: string;
-  suggestedActions?: string[]; // Dynamic smart suggestions
+  suggestedActions?: string[];
 }
 
 export interface FarmerProfile {
-  crops: string; // e.g. "Poone, Linaoa"
-  budget: string; // e.g. "M5000"
+  crops: string;
+  budget: string;
   preferredDistricts: string[];
 }
 
 export interface MatchInsight {
   listingId: string;
-  score: number; // 0-100
-  reason: string; // "Good soil for maize"
+  score: number;
+  reason: string;
 }
 
 export enum ViewState {
@@ -144,7 +130,8 @@ export enum ViewState {
   AGREEMENTS,
   DISPUTES,
   MESSAGES,
-  DIARY
+  DIARY,
+  CASHBOOK
 }
 
 export type Language = 'st' | 'en';

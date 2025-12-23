@@ -7,6 +7,7 @@ export const translations: TranslationDictionary = {
     "messages": { st: "Melaetsa", en: "Messages" },
     "agreements": { st: "Litumellano", en: "Agreements" },
     "diary": { st: "Buka ea Temo", en: "Farming Diary" },
+    "cashbook": { st: "Lichelete", en: "Cash Book" },
     "disputes": { st: "Likhohlano", en: "Disputes" },
     "logout": { st: "Tsoa", en: "Log Out" },
     

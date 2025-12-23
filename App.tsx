@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, ViewState, ChatMessage, Listing, Agreement, Dispute, Language, DiaryEntry, FarmerProfile } from './types';
+import { UserRole, ViewState, ChatMessage, Listing, Agreement, Dispute, Language, DiaryEntry, FarmerProfile, CashBookEntry } from './types';
 import { sendMessageToGemini, generateAgreementSummary } from './services/geminiService';
 import { dataStore } from './services/dataStore';
 import { translations } from './translations';
@@ -12,6 +12,7 @@ import AgreementsView from './components/AgreementsView';
 import DisputesView from './components/DisputesView';
 import MessagesView from './components/MessagesView';
 import DiaryView from './components/DiaryView';
+import CashBookView from './components/CashBookView';
 import LiveVoiceOverlay from './components/LiveVoiceOverlay';
 import Logo from './components/Logo';
 import { MOCK_AGREEMENTS, MOCK_DISPUTES, MOCK_LISTINGS, MOCK_CHAT_SESSIONS, MOCK_DIARY_ENTRIES, DISTRICTS } from './constants';
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [cashBookEntries, setCashBookEntries] = useState<CashBookEntry[]>([]);
 
   const t = (key: string) => translations[key]?.[language] || key;
 
@@ -54,6 +56,9 @@ const App: React.FC = () => {
         setAgreements(await dataStore.getAgreements(MOCK_AGREEMENTS));
         setDisputes(await dataStore.getDisputes(MOCK_DISPUTES));
         setDiaryEntries(await dataStore.getDiary(MOCK_DIARY_ENTRIES));
+
+        const savedCash = localStorage.getItem('konaki_cashbook');
+        if (savedCash) setCashBookEntries(JSON.parse(savedCash));
 
         const savedChatSessions = localStorage.getItem('konaki_chat_sessions');
         if (savedChatSessions) setChatSessions(JSON.parse(savedChatSessions));
@@ -99,6 +104,12 @@ const App: React.FC = () => {
       const updatedSessions = { ...chatSessions, [id]: newMessages };
       setChatSessions(updatedSessions);
       localStorage.setItem('konaki_chat_sessions', JSON.stringify(updatedSessions));
+  };
+
+  const addDiaryEntry = (e: DiaryEntry) => {
+    const updated = [e, ...diaryEntries];
+    setDiaryEntries(updated);
+    dataStore.saveDiary(updated);
   };
 
   if (viewState === ViewState.ONBOARDING || role === UserRole.NONE) {
@@ -166,11 +177,13 @@ const App: React.FC = () => {
           />;
           break;
       case ViewState.DIARY:
-          MainComponent = <DiaryView entries={diaryEntries} onAddEntry={(e) => {
-            const updated = [e, ...diaryEntries];
-            setDiaryEntries(updated);
-            dataStore.saveDiary(updated);
-          }} agreements={agreements} language={language} />;
+          MainComponent = <DiaryView entries={diaryEntries} onAddEntry={addDiaryEntry} agreements={agreements} language={language} />;
+          break;
+      case ViewState.CASHBOOK:
+          MainComponent = <CashBookView initialEntries={cashBookEntries} onUpdate={(entries) => {
+            setCashBookEntries(entries);
+            localStorage.setItem('konaki_cashbook', JSON.stringify(entries));
+          }} onAddDiaryEntry={addDiaryEntry} />;
           break;
       case ViewState.DISPUTES:
           MainComponent = <DisputesView 
@@ -262,6 +275,7 @@ const App: React.FC = () => {
                 <NavButton targetView={ViewState.DASHBOARD} icon="🏠" labelKey="home" />
                 <NavButton targetView={ViewState.MESSAGES} icon="💬" labelKey="messages" />
                 <NavButton targetView={ViewState.DIARY} icon="📖" labelKey="diary" />
+                <NavButton targetView={ViewState.CASHBOOK} icon="💰" labelKey="cashbook" />
                 <NavButton targetView={ViewState.AGREEMENTS} icon="📄" labelKey="agreements" />
                 <NavButton targetView={ViewState.DISPUTES} icon="⚖️" labelKey="disputes" />
             </nav>
@@ -303,6 +317,7 @@ const App: React.FC = () => {
                 <MobileNavButton targetView={ViewState.DASHBOARD} icon="🏠" labelKey="home" />
                 <MobileNavButton targetView={ViewState.MESSAGES} icon="💬" labelKey="messages" />
                 <MobileNavButton targetView={ViewState.DIARY} icon="📖" labelKey="diary" />
+                <MobileNavButton targetView={ViewState.CASHBOOK} icon="💰" labelKey="cashbook" />
                 <MobileNavButton targetView={ViewState.AGREEMENTS} icon="📄" labelKey="agreements" />
                 <MobileNavButton targetView={ViewState.DISPUTES} icon="⚖️" labelKey="disputes" />
             </div>
